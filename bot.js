@@ -93,10 +93,14 @@ bot.on('polling_error', (error) => {
 // Inline query handler - создание игры через @BotName в любом чате
 bot.on('inline_query', (query) => {
   try {
+    console.log(`📱 Inline query received from user ${query.from.id}`);
+    console.log(`   Query: "${query.query}"`);
+    if (query.chat_type) console.log(`   Chat type: ${query.chat_type}`);
+    
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
     
-    console.log(`📱 Inline query: creating game ${roomId}`);
+    console.log(`🎮 Creating game ${roomId}`);
     
     // Store the roomId
     const inlineKey = `inline:${query.id}`;
@@ -107,7 +111,7 @@ bot.on('inline_query', (query) => {
       queryId: query.id
     });
     
-    console.log(`✅ Inline game ${roomId} tracked at ${inlineKey}`);
+    console.log(`✅ Game ${roomId} tracked`);
     
     // Use article type with inline web_app button (NOT callback_data)
     const results = [
@@ -139,6 +143,7 @@ bot.on('inline_query', (query) => {
     console.log(`✅ Inline result sent for game ${roomId}`);
   } catch (error) {
     console.error('❌ Error in inline_query:', error.message);
+    console.error(error.stack);
   }
 });
 
