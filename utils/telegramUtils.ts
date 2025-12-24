@@ -185,7 +185,7 @@ export function getTelegramUsername(): string {
 
 /**
  * Get complete Telegram identity (userId + username)
- * Returns fallback values if not in Telegram context
+ * Returns fallback values if not in Telegram context, but uses localStorage for stability
  */
 export function getTelegramIdentity(): { userId: string; username: string; inTelegram: boolean } {
   const inTelegram = isTelegramWebApp();
@@ -199,10 +199,34 @@ export function getTelegramIdentity(): { userId: string; username: string; inTel
     return { userId, username, inTelegram: true };
   }
   
-  // Fallback для обычного браузера
-  console.log('⚠️ Fallback to generated identity (not in Telegram context)');
+  // Fallback для обычного браузера: используем localStorage для стабильности!
+  console.log('⚠️ Fallback to localStorage/generated identity (not in Telegram context)');
+  
+  // Проверяем есть ли сохраненный userId в localStorage
+  const savedUserId = localStorage.getItem('fallback_userId');
+  const savedUsername = localStorage.getItem('fallback_username');
+  
+  if (savedUserId && savedUsername) {
+    console.log(`✅ Using saved fallback identity from localStorage: ${savedUserId}`);
+    return {
+      userId: savedUserId,
+      username: savedUsername,
+      inTelegram: false
+    };
+  }
+  
+  // Генерируем новый fallback userId только если его нет в localStorage
   const fallbackUserId = `user-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   const fallbackUsername = `Player_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  
+  // Сохраняем в localStorage для использования при следующем открытии
+  try {
+    localStorage.setItem('fallback_userId', fallbackUserId);
+    localStorage.setItem('fallback_username', fallbackUsername);
+    console.log(`💾 Saved new fallback identity to localStorage: ${fallbackUserId}`);
+  } catch (err) {
+    console.warn('⚠️ Could not save to localStorage:', err);
+  }
   
   return {
     userId: fallbackUserId,

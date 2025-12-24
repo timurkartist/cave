@@ -99,13 +99,14 @@ function getRoomState(roomId) {
   if (!room) return null;
 
   // Для лобби показываем всех игроков из room.players
-  // (они там только если их WS соединение активно или только что присоединилось)
+  // (они там остаются даже при disconnect, но помечаются как offline)
   const players = Object.entries(room.players).map(([userId, playerData]) => {
     const client = wsClients.get(userId);
     return {
       userId,
       username: client?.username || `Player_${userId.substring(0, 6).toUpperCase()}`,
       character: client?.character || null,
+      online: !!(client && isWsOpen(client.ws)), // ВАЖНО: флаг онлайна
       isCreator: room.createdBy === userId,
       isInside: playerData.isInside,
       bankedTotal: playerData.bankedTotal,
@@ -136,7 +137,18 @@ function broadcastToRoom(roomId) {
   if (!payload) return;
 
   const msg = JSON.stringify({ type: 'room_state', payload });
-  const clients = Array.from(wsClients.values()).filter(client => client.roomId === roomId && isWsOpen(client.ws));
+  
+  // 🔍 DEBUG: Log all wsClients to see the state
+  const allClients = Array.from(wsClients.entries());
+  const roomClients = allClients.filter(([_, c]) => c.roomId === roomId);
+  const openClients = roomClients.filter(([_, c]) => isWsOpen(c.ws));
+  
+  console.log(`🔍 [DEBUG broadcastToRoom] allClients=${allClients.length}, roomClients=${roomClients.length}, openClients=${openClients.length}`);
+  roomClients.forEach(([uid, client]) => {
+    console.log(`   - ${uid}: isOpen=${isWsOpen(client.ws)}, lastSeen=${wsClients.get(uid) ? '✓' : '✗'}`);
+  });
+  
+  const clients = openClients.map(([_, c]) => c);
   
   console.log(`📡 Broadcasting to room ${roomId}: ${clients.length} connected clients, players in room: ${Object.keys(payload.players).length}`);
   
@@ -282,9 +294,14 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data.toString());
-      const { type, userId, payload } = message;
+      const { type, userId: rawUserId, payload } = message;
+      
+      // ВАЖНО: используем canonical userId из сокета, если уже присоединились
+      // Это гарантирует, что даже если фронт пришлет неправильный userId, 
+      // мы используем корректный (установленный при join_room)
+      const effectiveUserId = ws._userId || rawUserId;
 
-      if (!type || !userId) {
+      if (!type || !effectiveUserId) {
         ws.send(JSON.stringify({ type: 'error', message: 'Missing type or userId' }));
         return;
       }
@@ -395,6 +412,9 @@ wss.on('connection', (ws) => {
           // Сохраняем метаданные на ws для очистки
           ws._userId = validatedUserId;
           ws._roomId = finalRoomId;
+          
+          // 🔍 DEBUG: Log wsClients state after set
+          console.log(`🔍 [DEBUG after wsClients.set] wsClients.size=${wsClients.size}, wsClients.has(${validatedUserId})=${wsClients.has(validatedUserId)}`);
 
           const room = wsRooms.get(finalRoomId);
           
@@ -406,32 +426,45 @@ wss.on('connection', (ws) => {
           if (!room.players[validatedUserId]) {
             room.players[validatedUserId] = { isInside: true, bankedTotal: 0, roundStash: 0 };
           }
+          
+          // 🔍 DEBUG: Log room.players state after add
+          console.log(`🔍 [DEBUG after room.players add] room.players.count=${Object.keys(room.players).length}, keys=[${Object.keys(room.players).join(', ')}]`);
 
+          // ВАЖНО: отправить состояние конкретно этому сокету сразу
+          // Это страховка на случай если клиент еще не начал слушать broadcast
+          try {
+            ws.send(JSON.stringify({ type: 'room_state', payload: getRoomState(finalRoomId) }));
+            console.log(`✉️ Sent room_state directly to joining socket`);
+          } catch (err) {
+            console.error(`❌ Failed to send direct room_state: ${err.message}`);
+          }
+
+          // Затем broadcast всем остальным
           broadcastToRoom(finalRoomId);
           console.log(`[${finalRoomId}] ${finalUsername} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
           break;
         }
 
         case 'select_character': {
-          const client = wsClients.get(userId);
+          const client = wsClients.get(effectiveUserId);
           if (client) {
             const oldChar = client.character;
             client.character = payload.characterId;
-            console.log(`[${client.roomId}] ${userId} selected character: ${payload.characterId} (was: ${oldChar})`);
+            console.log(`[${client.roomId}] ${effectiveUserId} selected character: ${payload.characterId} (was: ${oldChar})`);
             broadcastToRoom(client.roomId);
             console.log(`[${client.roomId}] Broadcasted room state`);
           } else {
-            console.log(`[select_character] Client not found: ${userId}`);
+            console.log(`[select_character] Client not found: ${effectiveUserId}`);
           }
           break;
         }
 
         case 'start_game': {
-          const client = wsClients.get(userId);
+          const client = wsClients.get(effectiveUserId);
           if (!client) return;
 
           const room = wsRooms.get(client.roomId);
-          if (!room || room.createdBy !== userId) {
+          if (!room || room.createdBy !== effectiveUserId) {
             ws.send(JSON.stringify({ type: 'error', message: 'Only creator can start' }));
             return;
           }
@@ -473,22 +506,22 @@ wss.on('connection', (ws) => {
 
         case 'player_action': {
           const { action, data } = payload;
-          const client = wsClients.get(userId);
+          const client = wsClients.get(effectiveUserId);
           if (!client) return;
 
           const room = wsRooms.get(client.roomId);
           if (!room) return;
           
-          console.log(`[${room.roomId}] player_action: ${action}, userId: ${userId}, phase: ${room.phase}`);
+          console.log(`[${room.roomId}] player_action: ${action}, userId: ${effectiveUserId}, phase: ${room.phase}`);
 
           if (action === 'dig') {
             // ✅ Проверяем что это ход текущего игрока
-            if (room.phase !== 'EXPEDITION' || !room.players[userId]?.isInside) {
+            if (room.phase !== 'EXPEDITION' || !room.players[effectiveUserId]?.isInside) {
               return;
             }
 
-            if (room.currentTurnUserId !== userId) {
-              console.log(`[${room.roomId}] Dig denied: ${userId} tried to dig but it's ${room.currentTurnUserId}'s turn`);
+            if (room.currentTurnUserId !== effectiveUserId) {
+              console.log(`[${room.roomId}] Dig denied: ${effectiveUserId} tried to dig but it's ${room.currentTurnUserId}'s turn`);
               return;
             }
 
@@ -581,7 +614,7 @@ wss.on('connection', (ws) => {
             // ✅ Записываем решение
             if (room.phase !== 'VOTING') return;
 
-            room.currentDecisions[userId] = data.choice;
+            room.currentDecisions[effectiveUserId] = data.choice;
 
             // Проверяем все ли решили
             const insideIds = Object.entries(room.players)
@@ -629,8 +662,8 @@ wss.on('connection', (ws) => {
             }
 
             // Записываем что этот игрок готов
-            room.nextRoundAcks[userId] = true;
-            console.log(`[${room.roomId}] Player ${userId} acknowledged next_round, acks:`, room.nextRoundAcks);
+            room.nextRoundAcks[effectiveUserId] = true;
+            console.log(`[${room.roomId}] Player ${effectiveUserId} acknowledged next_round, acks:`, room.nextRoundAcks);
 
             // Получаем всех живых игроков в комнате
             const activePlayers = Array.from(wsClients.entries())
@@ -675,8 +708,8 @@ wss.on('connection', (ws) => {
             }
 
             // Записываем что этот игрок готов к новой игре
-            room.newGameAcks[userId] = true;
-            console.log(`[${room.roomId}] Player ${userId} acknowledged new_game, acks:`, room.newGameAcks);
+            room.newGameAcks[effectiveUserId] = true;
+            console.log(`[${room.roomId}] Player ${effectiveUserId} acknowledged new_game, acks:`, room.newGameAcks);
 
             // Получаем всех живых игроков в комнате
             const activePlayers = Array.from(wsClients.entries())
@@ -729,13 +762,13 @@ wss.on('connection', (ws) => {
         if (rid) {
           const room = wsRooms.get(rid);
           if (room) {
-            // Удаляем игрока из комнаты
-            delete room.players[uid];
-            console.log(`[${rid}] ${uid} removed from room.players`);
+            // НЕ удаляем игрока сразу из room.players — даём реконнекту случиться без "мигания"
+            // Игрок остаётся в room.players, но wsClients удален → он offline
+            console.log(`[${rid}] ${uid} disconnected (kept in room.players for reconnect)`);
             
             // Переназначаем creator если нужно
             if (room.createdBy === uid) {
-              // Ищем другого живого игрока в комнате
+              // Ищем другого живого игрока в комнате (только в wsClients)
               const anotherPlayer = Array.from(wsClients.values()).find(
                 c => c.roomId === rid && c.userId !== uid
               );
@@ -743,15 +776,14 @@ wss.on('connection', (ws) => {
                 room.createdBy = anotherPlayer.userId;
                 console.log(`[${rid}] Creator changed to ${anotherPlayer.userId}`);
               } else {
-                // Больше нет игроков - creator = null
+                // Больше нет онлайн игроков - creator = null
                 room.createdBy = null;
-                console.log(`[${rid}] Room empty - creator reset`);
+                console.log(`[${rid}] Room empty (no online players) - creator reset`);
               }
             }
           }
           broadcastToRoom(rid);
         }
-        console.log(`[${rid}] ${uid} disconnected`);
         return;
       }
     }
@@ -765,9 +797,8 @@ wss.on('connection', (ws) => {
         if (c.roomId) {
           const room = wsRooms.get(c.roomId);
           if (room) {
-            // Удаляем игрока из комнаты
-            delete room.players[scanUid];
-            console.log(`[${c.roomId}] ${scanUid} removed from room.players (fallback)`);
+            // НЕ удаляем игрока сразу из room.players
+            console.log(`[${c.roomId}] ${scanUid} disconnected (kept in room.players for reconnect, fallback)`);
             
             // Переназначаем creator если нужно
             if (room.createdBy === scanUid) {
@@ -779,13 +810,12 @@ wss.on('connection', (ws) => {
                 console.log(`[${c.roomId}] Creator changed to ${anotherPlayer.userId}`);
               } else {
                 room.createdBy = null;
-                console.log(`[${c.roomId}] Room empty - creator reset`);
+                console.log(`[${c.roomId}] Room empty (no online players) - creator reset`);
               }
             }
           }
           broadcastToRoom(c.roomId);
         }
-        console.log(`[${c.roomId}] ${scanUid} disconnected (fallback)`);
         break;
       }
     }
