@@ -98,8 +98,7 @@ bot.on('inline_query', (query) => {
     
     console.log(`📱 Inline query: creating game ${roomId}`);
     
-    // Store the roomId with a temporary key using query.id
-    // When callback comes, we'll update it with actual inline_message_id
+    // Store the roomId
     const inlineKey = `inline:${query.id}`;
     gameMessages.set(inlineKey, {
       roomId,
@@ -110,7 +109,7 @@ bot.on('inline_query', (query) => {
     
     console.log(`✅ Inline game ${roomId} tracked at ${inlineKey}`);
     
-    // Use article type with inline web_app button
+    // Use article type with inline web_app button (NOT callback_data)
     const results = [
       {
         type: 'article',
@@ -125,7 +124,7 @@ bot.on('inline_query', (query) => {
           inline_keyboard: [[
             {
               text: '🎮 Join Game',
-              callback_data: `join_game:${roomId}`
+              web_app: { url: gameUrl }
             }
           ]]
         }
@@ -146,83 +145,12 @@ bot.on('inline_query', (query) => {
 // Callback query handler - для кнопок Join Game на inline сообщениях
 bot.on('callback_query', async (q) => {
   try {
-    // Check if this is a join_game callback
-    if (q.data && q.data.startsWith('join_game:')) {
-      const roomId = q.data.substring(10); // Remove "join_game:" prefix
-      
-      console.log(`🎮 Join game callback: ${roomId}`);
-      
-      // Try to find the game in gameMessages
-      let found = false;
-      for (const [key, value] of gameMessages.entries()) {
-        if (value.roomId === roomId) {
-          console.log(`📍 Found game ${roomId} at key ${key}`);
-          found = true;
-          break;
-        }
-      }
-      
-      if (!found) {
-        console.log(`⚠️ Game ${roomId} not found in gameMessages, but creating anyway`);
-      }
-      
-      const url = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
-      console.log(`📍 Opening game ${roomId} at ${url}`);
-
-      await bot.answerCallbackQuery(q.id, { url });
-      console.log(`✅ Join callback answered for game ${roomId}`);
-      
-      return;
-    }
-    
-    // Handle old game_short_name callbacks (backwards compatibility)
-    if (q.game_short_name) {
-      console.log(`🎮 Game short name callback received for ${q.id}`);
-      
-      let roomId = null;
-      let gameData = null;
-      
-      // Check if it's from inline message
-      if (q.inline_message_id) {
-        const inlineKey = `inline:${q.id}`;
-        gameData = gameMessages.get(inlineKey);
-        if (gameData) {
-          roomId = gameData.roomId;
-          console.log(`📍 Found existing inline game: ${roomId}`);
-          
-          // Update the key to include actual inline_message_id
-          gameMessages.delete(inlineKey);
-          const newKey = `inline:${q.inline_message_id}`;
-          gameMessages.set(newKey, gameData);
-        }
-      }
-      
-      // If no existing game found, create fallback
-      if (!roomId) {
-        roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        console.log(`⚠️ No game found, creating new: ${roomId}`);
-      }
-      
-      const url = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
-      console.log(`📍 Opening game ${roomId} at ${url}`);
-
-      await bot.answerCallbackQuery(q.id, { url });
-      console.log(`✅ Callback query answered for game ${roomId}`);
-      
-      return;
-    }
-    
-    // Unknown callback
-    console.log('⚠️ Unknown callback query:', q.data);
-    await bot.answerCallbackQuery(q.id, { alert: true, text: 'Unknown action' });
-    
+    // This is now only for backwards compatibility
+    // We don't need to handle callbacks since web_app buttons open directly
+    console.log('⚠️ Unexpected callback query:', q.data);
+    await bot.answerCallbackQuery(q.id, { alert: true, text: 'Action not available' });
   } catch (error) {
     console.error('❌ Error in callback_query:', error.message);
-    try {
-      await bot.answerCallbackQuery(q.id, { alert: true, text: '❌ Failed to open game' });
-    } catch (err) {
-      console.error('❌ Error answering callback query:', err.message);
-    }
   }
 });
 
