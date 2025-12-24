@@ -84,19 +84,26 @@ export default function App() {
       usernameValue = telegramIdentity.username;
 
       // ===== ROOM ID LOGIC =====
-      // If startapp=group: use chat_instance from Telegram (all group members share same room)
-      // If startapp=solo: generate unique room for solo play
-      // Fallback: use query roomId or hash
-      
       if (startApp === 'group' && window.Telegram?.WebApp?.initDataUnsafe?.chat) {
         // Group mode: deterministic room based on chat_id
         const chatId = window.Telegram.WebApp.initDataUnsafe.chat.id;
-        // Use MD5-like approach: create stable hash from chat_id
         const hashString = Array.from(`chat_${chatId}`).reduce((h, c) => {
           return ((h << 5) - h + c.charCodeAt(0)) | 0;
         }, 0).toString(16);
         roomIdValue = `GROUP_${Math.abs(hashString).substring(0, 8).toUpperCase()}`;
         console.log(`📍 Group game mode - chat_id: ${chatId}, roomId: ${roomIdValue}`);
+      } else if (startApp === 'inline') {
+        // Inline mode: use user ID from URL parameter as room identifier
+        // Multiple users from same inline can join same room
+        const userParam = urlParams.get('u');
+        if (userParam) {
+          // Use the user who triggered inline query as room base
+          roomIdValue = `INLINE_${userParam.substring(0, 12).toUpperCase()}`;
+          console.log(`💬 Inline game mode - roomId: ${roomIdValue}`);
+        } else {
+          // Fallback if no user param
+          roomIdValue = `INLINE_${telegramIdentity.userId.substring(0, 12).toUpperCase()}`;
+        }
       } else if (startApp === 'solo') {
         // Solo mode: always new room
         roomIdValue = `SOLO_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;

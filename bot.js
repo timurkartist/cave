@@ -102,6 +102,36 @@ bot.on('polling_error', (error) => {
   console.error('Polling error:', error.message);
 });
 
+// Inline query handler - для поиска игры через @BotName
+bot.on('inline_query', async (q) => {
+  try {
+    // В группах Telegram иногда не показывает результаты без текста,
+    // поэтому поддерживаем любое q.query (включая пустое)
+    const roomKey = q.from.id; // Используем ID пользователя как ключ
+    const url = `${APP_URL}?startapp=inline&u=${encodeURIComponent(roomKey)}`;
+
+    console.log(`📱 Inline query from user ${q.from.id}, URL: ${url}`);
+
+    const results = [{
+      type: 'article',
+      id: 'keepitall_inline',
+      title: '🎮 KEEPITALL — Join game',
+      description: 'Open the game (Mini App)',
+      input_message_content: { message_text: '🎮 KEEPITALL' },
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🎮 Open game', web_app: { url } }
+        ]]
+      }
+    }];
+
+    await bot.answerInlineQuery(q.id, results, { cache_time: 0, is_personal: true });
+    console.log(`✅ Inline result sent`);
+  } catch (error) {
+    console.error('❌ Error in inline_query:', error.message);
+  }
+});
+
 // Обработка всех сообщений (работает в личных чатах и группах)
 bot.on('message', (msg) => {
   const text = msg.text || '';
