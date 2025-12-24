@@ -1,6 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
 
 // Load environment variables
 const envFile = process.env.NODE_ENV === 'production' ? '.env.hetzner' : '.env';
@@ -19,15 +18,6 @@ console.log(`  BOT_TOKEN: ${BOT_TOKEN.substring(0, 10)}...`);
 console.log(`  APP_URL: ${APP_URL}`);
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-
-// ===== HELPER FUNCTIONS =====
-// Generate deterministic roomId from chat_id
-const getRoomIdFromChatId = (chatId) => {
-  // Use MD5 hash of chat ID to create deterministic room ID
-  // This ensures same group always gets same room
-  const hash = crypto.createHash('md5').update(`chat_${chatId}`).digest('hex');
-  return hash.substring(0, 8).toUpperCase();
-};
 
 // Функция обработки команды /start
 const handleStartCommand = (msg) => {

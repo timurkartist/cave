@@ -84,32 +84,34 @@ export default function App() {
       usernameValue = telegramIdentity.username;
 
       // ===== ROOM ID LOGIC =====
-      if (startApp === 'group' && window.Telegram?.WebApp?.initDataUnsafe?.chat) {
-        // Group mode: deterministic room based on chat_id
-        const chatId = window.Telegram.WebApp.initDataUnsafe.chat.id;
+      // Получаем контекст чата из WebApp.initDataUnsafe (это источник истины в Telegram)
+      const chatData = window.Telegram?.WebApp?.initDataUnsafe?.chat;
+      
+      if (startApp === 'group' && chatData?.id) {
+        // Group mode: используем chat.id для детерминированного roomId
+        // Все в группе получат одинаковый roomId на основе chat_id
+        const chatId = chatData.id;
+        // Простой хеш: преобразуем chat_id в детерминированную строку
         const hashString = Array.from(`chat_${chatId}`).reduce((h, c) => {
           return ((h << 5) - h + c.charCodeAt(0)) | 0;
         }, 0).toString(16);
         roomIdValue = `GROUP_${Math.abs(hashString).substring(0, 8).toUpperCase()}`;
         console.log(`📍 Group game mode - chat_id: ${chatId}, roomId: ${roomIdValue}`);
       } else if (startApp === 'inline') {
-        // Inline mode: use user ID from URL parameter as room identifier
-        // Multiple users from same inline can join same room
+        // Inline mode: используем user ID из параметра
         const userParam = urlParams.get('u');
         if (userParam) {
-          // Use the user who triggered inline query as room base
           roomIdValue = `INLINE_${userParam.substring(0, 12).toUpperCase()}`;
           console.log(`💬 Inline game mode - roomId: ${roomIdValue}`);
         } else {
-          // Fallback if no user param
           roomIdValue = `INLINE_${telegramIdentity.userId.substring(0, 12).toUpperCase()}`;
         }
       } else if (startApp === 'solo') {
-        // Solo mode: always new room
+        // Solo mode: всегда новая игра
         roomIdValue = `SOLO_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         console.log(`🎮 Solo game mode - roomId: ${roomIdValue}`);
       } else {
-        // Fallback: use explicit roomId from URL
+        // Fallback: используем явный roomId из URL
         roomIdValue = urlParams.get('roomId');
         
         if (!roomIdValue) {
@@ -137,7 +139,8 @@ export default function App() {
         userId: userIdValue,
         username: usernameValue,
         roomId: roomIdValue,
-        chatType: window.Telegram?.WebApp?.initDataUnsafe?.chat?.type,
+        chatType: chatData?.type,
+        chatId: chatData?.id,
         startapp
       });
     }
