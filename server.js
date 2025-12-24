@@ -141,15 +141,17 @@ function broadcastToRoom(roomId) {
   if (!payload) return;
 
   const msg = JSON.stringify({ type: 'room_state', payload });
-  Array.from(wsClients.values())
-    .filter(client => client.roomId === roomId && isWsOpen(client.ws))
-    .forEach(client => {
-      try {
-        client.ws.send(msg);
-      } catch (err) {
-        // Ignore send errors
-      }
-    });
+  const clients = Array.from(wsClients.values()).filter(client => client.roomId === roomId && isWsOpen(client.ws));
+  
+  console.log(`📡 Broadcasting to room ${roomId}: ${clients.length} connected clients, players in room: ${Object.keys(payload.players).length}`);
+  
+  clients.forEach(client => {
+    try {
+      client.ws.send(msg);
+    } catch (err) {
+      // Ignore send errors
+    }
+  });
 }
 
 // ===== GAME LOGIC =====

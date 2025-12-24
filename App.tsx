@@ -115,15 +115,19 @@ export default function App() {
           // Это детерминированный ключ для лобби от бота
           const lobbyParam = urlParams.get('lobby');
           
+          console.log(`🔍 Game API mode - checking lobby: ${lobbyParam}`);
+          console.log(`🔗 Full URL: ${window.location.href}`);
+          console.log(`📍 URL search params:`, Object.fromEntries(urlParams.entries()));
+          
           if (lobbyParam) {
             // Используем lobby как основу для roomId
             // Все с одинаковым lobby попадут в одно лобби
             roomIdValue = `GAME_${lobbyParam.substring(0, 30).toUpperCase()}`;
-            console.log(`🎮 Telegram Game API mode - lobby: ${lobbyParam}, roomId: ${roomIdValue}`);
+            console.log(`✅ Telegram Game API mode - lobby: ${lobbyParam}, roomId: ${roomIdValue}`);
           } else {
             // Fallback если нет lobby параметра
             roomIdValue = `GAME_TEMP_${Date.now().toString(36).toUpperCase()}`;
-            console.log(`⚠️ No lobby parameter, generated roomId: ${roomIdValue}`);
+            console.log(`⚠️ No lobby parameter found! Generated temp roomId: ${roomIdValue}`);
           }
         } else if (startAppParam === 'group' && chatData?.id) {
           // Group mode: используем chat.id для детерминированного roomId
