@@ -40,12 +40,26 @@ export function getTelegramWebApp() {
  * Returns null if not in Telegram context
  */
 export function getTelegramUserData(): TelegramUser | null {
-  if (!isTelegramWebApp()) return null;
+  if (!isTelegramWebApp()) {
+    console.log('❌ Not in Telegram WebApp');
+    return null;
+  }
   
   const webApp = getTelegramWebApp();
-  const user = webApp?.initDataUnsafe?.user;
+  const initDataUnsafe = webApp?.initDataUnsafe;
+  const user = initDataUnsafe?.user;
   
-  if (!user || typeof user !== 'object') return null;
+  console.log('🔍 getTelegramUserData:', { 
+    hasWebApp: !!webApp, 
+    hasInitDataUnsafe: !!initDataUnsafe,
+    hasUser: !!user,
+    user: user ? { id: user.id, first_name: user.first_name, username: user.username } : null
+  });
+  
+  if (!user || typeof user !== 'object') {
+    console.log('⚠️ No user data in initDataUnsafe');
+    return null;
+  }
   
   return {
     id: user.id,
@@ -73,7 +87,11 @@ export function getTelegramInitData(): string | null {
  */
 export function getTelegramUserId(): string | null {
   const user = getTelegramUserData();
-  if (!user) return null;
+  if (!user) {
+    console.log('❌ No Telegram user, returning null');
+    return null;
+  }
+  console.log('✅ Got Telegram user ID:', user.id);
   return String(user.id);
 }
 
