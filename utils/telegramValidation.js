@@ -66,11 +66,11 @@ export function validateTelegramInitData(initData, botToken) {
     }
 
     const user = JSON.parse(userStr);
-    const startParam = params.get('start_param');
+    const inlineMessageId = params.get('inline_message_id');
     
     console.log('✅ initData validated successfully, user:', user.id);
     
-    return { valid: true, user, startParam };
+    return { valid: true, user, inlineMessageId };
   } catch (error) {
     console.error('❌ Error validating initData:', error);
     return { valid: false };

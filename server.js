@@ -333,17 +333,11 @@ wss.on('connection', (ws) => {
                 console.log(`✅ initData validated, Telegram user: ${validatedUserId}`);
               }
               
-              // Извлекаем start_param - он содержит кодированный messageId
-              if (validation.startParam) {
-                try {
-                  const decodedParam = Buffer.from(validation.startParam, 'base64').toString('utf-8');
-                  if (decodedParam.startsWith('msg_')) {
-                    inlineMessageId = decodedParam;
-                    console.log(`📍 Extracted message ID from start_param: ${inlineMessageId}`);
-                  }
-                } catch (err) {
-                  console.warn(`⚠️ Could not decode start_param: ${validation.startParam}`);
-                }
+              // Извлекаем inline_message_id - это уникальный ключ для лобби в Telegram Game API
+              // Telegram гарантированно передаёт это в initDataUnsafe.inline_message_id
+              if (validation.inlineMessageId) {
+                inlineMessageId = validation.inlineMessageId;
+                console.log(`📍 Got inline_message_id from Telegram: ${inlineMessageId}`);
               }
             }
           }

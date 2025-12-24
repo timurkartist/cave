@@ -119,26 +119,12 @@ bot.on('callback_query', async (q) => {
     }
 
     console.log(`🎮 Game callback from user ${q.from.id}, game: ${q.game_short_name}`);
+    console.log(`   inline_message_id: ${q.inline_message_id}`);
 
-    // Используем inline_message_id (для inline) или message_id (для обычных сообщений)
-    // как идентификатор лобби - все кто кликнет на одно сообщение попадут в одно лобби
-    const messageId = q.inline_message_id || q.message?.message_id;
-    
-    if (!messageId) {
-      console.warn('⚠️ No message_id or inline_message_id found');
-      await bot.answerCallbackQuery(q.id, {
-        text: '❌ Error: could not identify game session',
-        show_alert: true
-      });
-      return;
-    }
-    
-    // Кодируем messageId как start_param для передачи в мини-приложение
-    // Telegram передаст это в initDataUnsafe.start_param
-    const startParam = Buffer.from(`msg_${messageId}`).toString('base64');
+    // Telegram Game API передаёт inline_message_id в callback_query
+    // Мини-приложение получит это в initDataUnsafe.inline_message_id
+    // Сервер использует это как уникальный ключ для лобби
     const url = `${APP_URL}?startapp=game`;
-    
-    console.log(`📍 Opening game with message_id: ${messageId} (encoded: ${startParam})`);
 
     await bot.answerCallbackQuery(q.id, { url });
     console.log(`✅ Game URL sent to user`);
