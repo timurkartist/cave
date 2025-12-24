@@ -184,7 +184,7 @@ bot.on('inline_query', (query) => {
       {
         type: 'game',
         id: roomId,
-        game_short_name: 'cave'  // Must be defined in BotFather
+        game_short_name: 'keepitall'  // Must be defined in BotFather
       }
     ];
     
@@ -214,6 +214,33 @@ bot.on('inline_query', (query) => {
     console.log(`✅ Inline result sent for game ${roomId}`);
   } catch (error) {
     console.error('❌ Error in inline_query:', error.message);
+  }
+});
+
+// Callback query handler - для кнопок Play на inline сообщениях
+bot.on('callback_query', async (q) => {
+  try {
+    if (!q.game_short_name) {
+      console.log('⚠️ Callback query without game_short_name, ignoring');
+      return;
+    }
+
+    console.log(`🎮 Play callback received, creating game...`);
+    
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const url = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
+    
+    console.log(`📍 Opening game ${roomId} at ${url}`);
+
+    await bot.answerCallbackQuery(q.id, { url });
+    console.log(`✅ Callback query answered with game URL`);
+  } catch (error) {
+    console.error('❌ Error in callback_query:', error.message);
+    try {
+      await bot.answerCallbackQuery(q.id, { alert: true, text: '❌ Failed to open game' });
+    } catch (err) {
+      console.error('❌ Error answering callback query:', err.message);
+    }
   }
 });
 
