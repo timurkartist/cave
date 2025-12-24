@@ -73,16 +73,17 @@ export default function App() {
       let userIdValue: string | null = null;
       let usernameValue: string | null = null;
 
-      // Из hash (#roomId=...) - главный источник
-      const hash = window.location.hash.substring(1); // Удаляем #
-      const hashParams = new URLSearchParams(hash);
-      roomIdValue = hashParams.get('roomId');
-
-      // Если есть в query string - используем
+      // Приоритет 1: Query string параметры (?roomId=...) - теперь главный источник
       const urlParams = new URLSearchParams(window.location.search);
+      roomIdValue = urlParams.get('roomId');
+
+      // Приоритет 2: Fallback на hash (#roomId=...) для обратной совместимости
       if (!roomIdValue) {
-        roomIdValue = urlParams.get('roomId');
+        const hash = window.location.hash.substring(1); // Удаляем #
+        const hashParams = new URLSearchParams(hash);
+        roomIdValue = hashParams.get('roomId');
       }
+
       userIdValue = urlParams.get('userId');
       usernameValue = urlParams.get('username');
 

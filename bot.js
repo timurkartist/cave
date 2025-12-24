@@ -57,7 +57,8 @@ const handleNewGameCommand = async (msg) => {
       // Continue anyway - game creation is not critical
     }
     
-    const gameUrl = `${APP_URL}/#roomId=${roomId}`;
+    // Use query parameter (?roomId=...) instead of hash (#roomId=...)
+    const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
     console.log(`📍 Game URL: ${gameUrl}`);
     
     const messageOptions = {
@@ -152,7 +153,7 @@ bot.on('polling_error', (error) => {
 // Inline query handler - для использования бота без добавления в группу
 bot.on('inline_query', (query) => {
   const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const gameUrl = `${APP_URL}/#roomId=${roomId}`;
+  const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
   
   const results = [
     {
@@ -166,7 +167,7 @@ bot.on('inline_query', (query) => {
       },
       reply_markup: {
         inline_keyboard: [[
-          { text: '🎮 Join Game', url: gameUrl }
+          { text: '🎮 Join Game', web_app: { url: gameUrl } }
         ]]
       }
     }
