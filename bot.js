@@ -120,12 +120,14 @@ bot.on('callback_query', async (q) => {
 
     console.log(`🎮 Game callback from user ${q.from.id}, game: ${q.game_short_name}`);
 
-    // Используем inline_message_id или message_id для детерминированного room
-    // Все кто кликнут на одно сообщение → один room
-    const messageKey = q.inline_message_id || q.message?.message_id;
-    const roomIdentifier = messageKey ? `msg_${messageKey}` : `user_${q.from.id}_${Date.now()}`;
+    // СТРАТЕГИЯ: Telegram Game API не передаёт query parameters
+    // Вместо этого передаём room_id через start_param (это Telegram параметр)
+    const messageKey = q.inline_message_id || q.message?.message_id || `${q.from.id}_${Date.now()}`;
+    const roomIdentifier = `msg_${messageKey}`;
     
-    const url = `${APP_URL}?startapp=game&k=${encodeURIComponent(roomIdentifier)}`;
+    // start_param - это Telegram встроенный параметр
+    // Telegram передаст его в initDataUnsafe.start_param
+    const url = `${APP_URL}?startapp=game#${roomIdentifier}`;
     
     console.log(`📍 Opening game with room identifier: ${roomIdentifier}`);
 

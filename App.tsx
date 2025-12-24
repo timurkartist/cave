@@ -69,97 +69,124 @@ export default function App() {
 
   // ===== ИНИЦИАЛИЗАЦИЯ USER ID / ROOM CODE ИЗ URL И TELEGRAM =====
   useEffect(() => {
-    console.log('🚀 App initializing...');
-    if (typeof window !== 'undefined') {
-      let roomIdValue: string | null = null;
-      let userIdValue: string | null = null;
-      let usernameValue: string | null = null;
+    try {
+      console.log('🚀 App initializing...');
+      if (typeof window !== 'undefined') {
+        let roomIdValue: string | null = null;
+        let userIdValue: string | null = null;
+        let usernameValue: string | null = null;
 
-      const urlParams = new URLSearchParams(window.location.search);
-      
-      // Check for startapp parameter (from Telegram Mini App main button)
-      const startApp = urlParams.get('startapp');
-      console.log('📋 URL params:', { startapp: startApp, search: window.location.search });
-      
-      const telegramIdentity = getTelegramIdentity();
-      console.log('📱 Telegram identity:', telegramIdentity);
-      
-      userIdValue = telegramIdentity.userId;
-      usernameValue = telegramIdentity.username;
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        // Check for startapp parameter (from Telegram Mini App main button)
+        const startAppParam = urlParams.get('startapp');
+        // Параметр комнаты может быть в hash (от Game API callback)
+        const roomKeyFromHash = window.location.hash.substring(1).split('?')[0];
+        
+        console.log('📋 URL params:', { 
+          startapp: startAppParam, 
+          search: window.location.search,
+          hash: window.location.hash,
+          hashRoomKey: roomKeyFromHash
+        });
+        
+        const telegramIdentity = getTelegramIdentity();
+        console.log('📱 Telegram identity:', telegramIdentity);
+        
+        userIdValue = telegramIdentity.userId;
+        usernameValue = telegramIdentity.username;
 
-      // ===== ROOM ID LOGIC =====
-      // Получаем контекст чата из WebApp.initDataUnsafe (это источник истины в Telegram)
-      const chatData = window.Telegram?.WebApp?.initDataUnsafe?.chat;
-      console.log('💬 Chat data:', chatData);
-      
-      if (startApp === 'game') {
-        // Game API mode: детерминированный room по message_id
-        const messageKey = urlParams.get('k');
-        if (messageKey) {
-          roomIdValue = `GAME_${messageKey.substring(0, 20).toUpperCase()}`;
-          console.log(`🎮 Telegram Game mode - message key: ${messageKey}, roomId: ${roomIdValue}`);
-        } else {
-          // Fallback if no message key
-          roomIdValue = `GAME_${Date.now().toString(36).toUpperCase()}`;
-        }
-      } else if (startApp === 'group' && chatData?.id) {
-        // Group mode: используем chat.id для детерминированного roomId
-        // Все в группе получат одинаковый roomId на основе chat_id
-        const chatId = chatData.id;
-        // Простой хеш: преобразуем chat_id в детерминированную строку
-        const hashString = Array.from(`chat_${chatId}`).reduce((h, c) => {
-          return ((h << 5) - h + c.charCodeAt(0)) | 0;
-        }, 0).toString(16);
-        roomIdValue = `GROUP_${Math.abs(hashString).substring(0, 8).toUpperCase()}`;
-        console.log(`📍 Group game mode - chat_id: ${chatId}, roomId: ${roomIdValue}`);
-      } else if (startApp === 'inline') {
-        // Inline mode: используем user ID из параметра
-        const userParam = urlParams.get('u');
-        if (userParam) {
-          roomIdValue = `INLINE_${userParam.substring(0, 12).toUpperCase()}`;
-          console.log(`💬 Inline game mode - roomId: ${roomIdValue}`);
-        } else {
-          roomIdValue = `INLINE_${telegramIdentity.userId.substring(0, 12).toUpperCase()}`;
-        }
-      } else if (startApp === 'solo') {
-        // Solo mode: всегда новая игра
-        roomIdValue = `SOLO_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        console.log(`🎮 Solo game mode - roomId: ${roomIdValue}`);
-      } else {
-        // Fallback: используем явный roomId из URL
-        roomIdValue = urlParams.get('roomId');
+        // ===== ROOM ID LOGIC =====
+        // Получаем контекст чата из WebApp.initDataUnsafe (это источник истины в Telegram)
+        const chatData = window.Telegram?.WebApp?.initDataUnsafe?.chat;
+        const gameInstance = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+        console.log('💬 Chat data:', chatData);
+        console.log('🎮 Game instance/start_param:', gameInstance);
         
-        if (!roomIdValue) {
-          const hash = window.location.hash.substring(1);
-          const hashParams = new URLSearchParams(hash);
-          roomIdValue = hashParams.get('roomId');
+        // Если это Telegram Game API
+        if (startAppParam === 'game') {
+          // Параметр может быть в разных местах из-за того, как Telegram обрабатывает URL
+          let roomKey = roomKeyFromHash || gameInstance;
+          
+          // Fallback: используем inline_message_id если доступен
+          if (!roomKey && window.Telegram?.WebApp?.initDataUnsafe) {
+            const inlineMessageId = window.Telegram.WebApp.initDataUnsafe.inline_message_id;
+            if (inlineMessageId) {
+              roomKey = `msg_${inlineMessageId}`;
+            }
+          }
+          
+          if (roomKey) {
+            roomIdValue = `GAME_${roomKey.substring(0, 20).toUpperCase()}`;
+            console.log(`🎮 Telegram Game API mode - room key: ${roomKey}, roomId: ${roomIdValue}`);
+          } else {
+            // Fallback if no room key at all
+            roomIdValue = `GAME_${Date.now().toString(36).toUpperCase()}`;
+            console.log(`🎮 Telegram Game API mode (no key) - generated roomId: ${roomIdValue}`);
+          }
+        } else if (startAppParam === 'group' && chatData?.id) {
+          // Group mode: используем chat.id для детерминированного roomId
+          // Все в группе получат одинаковый roomId на основе chat_id
+          const chatId = chatData.id;
+          // Простой хеш: преобразуем chat_id в детерминированную строку
+          const hashString = Array.from(`chat_${chatId}`).reduce((h, c) => {
+            return ((h << 5) - h + c.charCodeAt(0)) | 0;
+          }, 0).toString(16);
+          roomIdValue = `GROUP_${Math.abs(hashString).substring(0, 8).toUpperCase()}`;
+          console.log(`📍 Group game mode - chat_id: ${chatId}, roomId: ${roomIdValue}`);
+        } else if (startAppParam === 'inline') {
+          // Inline mode: используем user ID из параметра
+          const userParam = urlParams.get('u');
+          if (userParam) {
+            roomIdValue = `INLINE_${userParam.substring(0, 12).toUpperCase()}`;
+            console.log(`💬 Inline game mode - roomId: ${roomIdValue}`);
+          } else {
+            roomIdValue = `INLINE_${telegramIdentity.userId.substring(0, 12).toUpperCase()}`;
+          }
+        } else if (startAppParam === 'solo') {
+          // Solo mode: всегда новая игра
+          roomIdValue = `SOLO_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          console.log(`🎮 Solo game mode - roomId: ${roomIdValue}`);
+        } else {
+          // Fallback: используем явный roomId из URL
+          roomIdValue = urlParams.get('roomId');
+          
+          if (!roomIdValue && roomKeyFromHash) {
+            // Если есть ключ в hash - используем его
+            roomIdValue = `ROOM_${roomKeyFromHash.substring(0, 20).toUpperCase()}`;
+            console.log(`📍 Room from hash - roomId: ${roomIdValue}`);
+          }
+          
+          if (!roomIdValue) {
+            roomIdValue = `room-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          }
         }
-        
-        if (!roomIdValue) {
-          roomIdValue = `room-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        }
+
+        console.log('✅ Room ID computed:', roomIdValue);
+
+        setRoomCode(roomIdValue);
+        setUserId(userIdValue);
+        setUsername(usernameValue);
+
+        // Сохраняем в sessionStorage как backup
+        sessionStorage.setItem('roomId', roomIdValue);
+        sessionStorage.setItem('userId', userIdValue);
+        sessionStorage.setItem('username', usernameValue);
+
+        console.log('🔐 Identity:', {
+          inTelegram: telegramIdentity.inTelegram,
+          userId: userIdValue,
+          username: usernameValue,
+          roomId: roomIdValue,
+          chatType: chatData?.type,
+          chatId: chatData?.id,
+          startapp: startAppParam,
+          inlineMessageId: window.Telegram?.WebApp?.initDataUnsafe?.inline_message_id
+        });
       }
-
-      console.log('✅ Room ID computed:', roomIdValue);
-
-      setRoomCode(roomIdValue);
-      setUserId(userIdValue);
-      setUsername(usernameValue);
-
-      // Сохраняем в sessionStorage как backup
-      sessionStorage.setItem('roomId', roomIdValue);
-      sessionStorage.setItem('userId', userIdValue);
-      sessionStorage.setItem('username', usernameValue);
-
-      console.log('🔐 Identity:', {
-        inTelegram: telegramIdentity.inTelegram,
-        userId: userIdValue,
-        username: usernameValue,
-        roomId: roomIdValue,
-        chatType: chatData?.type,
-        chatId: chatData?.id,
-        startapp
-      });
+    } catch (error) {
+      console.error('❌ Error during initialization:', error);
     }
   }, []);
 
