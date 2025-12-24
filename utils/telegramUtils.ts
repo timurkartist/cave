@@ -113,11 +113,15 @@ export function getTelegramIdentity(): { userId: string; username: string; inTel
   const userId = getTelegramUserId();
   const username = getTelegramUsername();
   
+  console.log('🔐 getTelegramIdentity:', { inTelegram, userId, username, hasTelegramUser: !!getTelegramUserData() });
+  
   if (inTelegram && userId) {
+    console.log('✅ Using real Telegram identity');
     return { userId, username, inTelegram: true };
   }
   
   // Fallback для обычного браузера
+  console.log('⚠️ Fallback to generated identity (not in Telegram context)');
   const fallbackUserId = `user-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   const fallbackUsername = `Player_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
   

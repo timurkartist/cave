@@ -96,6 +96,7 @@ export default function App() {
         
         userIdValue = telegramIdentity.userId;
         usernameValue = telegramIdentity.username;
+        console.log('🎮 Using username:', usernameValue, 'userId:', userIdValue, 'inTelegram:', telegramIdentity.inTelegram);
 
         // ===== ROOM ID LOGIC =====
         // Получаем контекст чата из WebApp.initDataUnsafe (это источник истины в Telegram)
