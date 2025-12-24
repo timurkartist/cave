@@ -111,6 +111,7 @@ function getRoomState(roomId) {
         userId,
         username: client.username,
         character: client.character,
+        isCreator: room.createdBy === userId,
         isInside: playerData.isInside,
         bankedTotal: playerData.bankedTotal,
         roundStash: playerData.roundStash
@@ -689,7 +690,26 @@ wss.on('connection', (ws) => {
       const current = wsClients.get(uid);
       if (current && current.ws === ws) {
         wsClients.delete(uid);
-        if (rid) broadcastToRoom(rid);
+        
+        // Если это был creator - переназначаем creator другому игроку в комнате
+        if (rid) {
+          const room = wsRooms.get(rid);
+          if (room && room.createdBy === uid) {
+            // Ищем другого живого игрока в комнате
+            const anotherPlayer = Array.from(wsClients.values()).find(
+              c => c.roomId === rid && c.userId !== uid
+            );
+            if (anotherPlayer) {
+              room.createdBy = anotherPlayer.userId;
+              console.log(`[${rid}] Creator changed to ${anotherPlayer.userId}`);
+            } else {
+              // Больше нет игроков - creator = null
+              room.createdBy = null;
+              console.log(`[${rid}] Room empty - creator reset`);
+            }
+          }
+          broadcastToRoom(rid);
+        }
         console.log(`[${rid}] ${uid} disconnected`);
         return;
       }
@@ -699,7 +719,24 @@ wss.on('connection', (ws) => {
     for (const [scanUid, c] of wsClients.entries()) {
       if (c.ws === ws) {
         wsClients.delete(scanUid);
-        if (c.roomId) broadcastToRoom(c.roomId);
+        
+        // Переназначение creator при отключении
+        if (c.roomId) {
+          const room = wsRooms.get(c.roomId);
+          if (room && room.createdBy === scanUid) {
+            const anotherPlayer = Array.from(wsClients.values()).find(
+              cl => cl.roomId === c.roomId && cl.userId !== scanUid
+            );
+            if (anotherPlayer) {
+              room.createdBy = anotherPlayer.userId;
+              console.log(`[${c.roomId}] Creator changed to ${anotherPlayer.userId}`);
+            } else {
+              room.createdBy = null;
+              console.log(`[${c.roomId}] Room empty - creator reset`);
+            }
+          }
+          broadcastToRoom(c.roomId);
+        }
         console.log(`[${c.roomId}] ${scanUid} disconnected (fallback)`);
         break;
       }
