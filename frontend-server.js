@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createProxyMiddleware } from 'express-http-proxy';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import WebSocket from 'ws';
