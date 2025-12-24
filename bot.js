@@ -68,7 +68,7 @@ bot.onText(/\/newgame/, async (msg) => {
         inline_keyboard: [[
           { 
             text: '🎮 Join Game Lobby',
-            url: gameUrl
+            web_app: { url: gameUrl }
           }
         ]]
       }
