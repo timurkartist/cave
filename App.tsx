@@ -87,7 +87,17 @@ export default function App() {
       // Получаем контекст чата из WebApp.initDataUnsafe (это источник истины в Telegram)
       const chatData = window.Telegram?.WebApp?.initDataUnsafe?.chat;
       
-      if (startApp === 'group' && chatData?.id) {
+      if (startApp === 'game') {
+        // Game API mode: детерминированный room по message_id
+        const messageKey = urlParams.get('k');
+        if (messageKey) {
+          roomIdValue = `GAME_${messageKey.substring(0, 20).toUpperCase()}`;
+          console.log(`🎮 Telegram Game mode - message key: ${messageKey}, roomId: ${roomIdValue}`);
+        } else {
+          // Fallback if no message key
+          roomIdValue = `GAME_${Date.now().toString(36).toUpperCase()}`;
+        }
+      } else if (startApp === 'group' && chatData?.id) {
         // Group mode: используем chat.id для детерминированного roomId
         // Все в группе получат одинаковый roomId на основе chat_id
         const chatId = chatData.id;

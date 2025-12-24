@@ -92,35 +92,47 @@ bot.on('polling_error', (error) => {
   console.error('Polling error:', error.message);
 });
 
-// Inline query handler - для поиска игры через @BotName
+// Inline query handler - использую Telegram Game API
 bot.on('inline_query', async (q) => {
   try {
-    // В группах Telegram иногда не показывает результаты без текста,
-    // поэтому поддерживаем любое q.query (включая пустое)
-    const roomKey = q.from.id; // Используем ID пользователя как ключ
-    const url = `${APP_URL}?startapp=inline&u=${encodeURIComponent(roomKey)}`;
-
-    console.log(`📱 Inline query from user ${q.from.id}, URL: ${url}`);
-
-    // ВАЖНО: В inline_query нельзя использовать web_app кнопки!
-    // Используем обычный url с openURL
+    console.log(`📱 Inline game query from user ${q.from.id}`);
+    
     const results = [{
-      type: 'article',
-      id: 'keepitall_inline',
-      title: '🎮 KEEPITALL — Join game',
-      description: 'Open the game (Mini App)',
-      input_message_content: { message_text: '🎮 KEEPITALL' },
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '🎮 Open game', url }
-        ]]
-      }
+      type: 'game',
+      id: 'keepitall',
+      game_short_name: 'keepitall'
     }];
 
     await bot.answerInlineQuery(q.id, results, { cache_time: 0, is_personal: true });
-    console.log(`✅ Inline result sent`);
+    console.log(`✅ Game result sent`);
   } catch (error) {
     console.error('❌ Error in inline_query:', error.message);
+  }
+});
+
+// Callback query handler - обработка клика на Play в игре
+bot.on('callback_query', async (q) => {
+  try {
+    if (!q.game_short_name) {
+      console.log('⚠️ Callback query without game_short_name, ignoring');
+      return;
+    }
+
+    console.log(`🎮 Game callback from user ${q.from.id}, game: ${q.game_short_name}`);
+
+    // Используем inline_message_id или message_id для детерминированного room
+    // Все кто кликнут на одно сообщение → один room
+    const messageKey = q.inline_message_id || q.message?.message_id;
+    const roomIdentifier = messageKey ? `msg_${messageKey}` : `user_${q.from.id}_${Date.now()}`;
+    
+    const url = `${APP_URL}?startapp=game&k=${encodeURIComponent(roomIdentifier)}`;
+    
+    console.log(`📍 Opening game with room identifier: ${roomIdentifier}`);
+
+    await bot.answerCallbackQuery(q.id, { url });
+    console.log(`✅ Game URL sent to user`);
+  } catch (error) {
+    console.error('❌ Error in callback_query:', error.message);
   }
 });
 
