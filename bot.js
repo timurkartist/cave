@@ -60,13 +60,14 @@ const handleNewGameCommand = async (msg) => {
     const gameUrl = `${APP_URL}/#roomId=${roomId}`;
     console.log(`📍 Game URL: ${gameUrl}`);
     
+    // Try web_app format first (for Telegram Bot API 6.4+)
     const messageOptions = {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [[
           { 
             text: '🎮 Join Game Lobby',
-            url: gameUrl
+            web_app: { url: gameUrl }
           }
         ]]
       }
@@ -78,8 +79,26 @@ const handleNewGameCommand = async (msg) => {
       `🆔 Game ID: ${roomId}\n\n` +
       `Click the button below to join!`;
 
-    await bot.sendMessage(chatId, messageText, messageOptions);
-    console.log(`✅ Game message sent to chat ${chatId}`);
+    try {
+      await bot.sendMessage(chatId, messageText, messageOptions);
+      console.log(`✅ Game message sent with web_app to chat ${chatId}`);
+    } catch (webAppError) {
+      // Fallback to regular URL if web_app fails
+      console.warn('⚠️ web_app failed, using fallback url:', webAppError.message);
+      const fallbackOptions = {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[
+            { 
+              text: '🎮 Join Game Lobby',
+              url: gameUrl
+            }
+          ]]
+        }
+      };
+      await bot.sendMessage(chatId, messageText, fallbackOptions);
+      console.log(`✅ Game message sent with fallback url to chat ${chatId}`);
+    }
 
   } catch (error) {
     console.error('❌ Error in handleNewGameCommand:', error.message);
@@ -147,6 +166,32 @@ bot.on('message', (msg) => {
 // Error handling
 bot.on('polling_error', (error) => {
   console.error('Polling error:', error.message);
+});
+
+// Inline query handler - для использования бота без добавления в группу
+bot.on('inline_query', (query) => {
+  const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const gameUrl = `${APP_URL}/#roomId=${roomId}`;
+  
+  const results = [
+    {
+      type: 'article',
+      id: roomId,
+      title: '🎮 Create New Game',
+      description: `Game ID: ${roomId}`,
+      input_message_content: {
+        message_text: `🎮 New Game Lobby\n\n🆔 Game ID: ${roomId}\n\nJoin: ${gameUrl}`,
+        parse_mode: 'HTML'
+      },
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🎮 Join Game', url: gameUrl }
+        ]]
+      }
+    }
+  ];
+  
+  bot.answerInlineQuery(query.id, results);
 });
 
 bot.on('error', (error) => {
