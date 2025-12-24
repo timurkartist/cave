@@ -5,8 +5,7 @@ import crypto from 'crypto';
  * Based on Telegram's official validation method
  * https://core.telegram.org/bots/webapps#validating-data-received-from-the-client
  */
-
-export function validateTelegramInitData(initData: string, botToken: string): { valid: boolean; user?: any } {
+export function validateTelegramInitData(initData, botToken) {
   if (!initData || !botToken) {
     return { valid: false };
   }
@@ -80,7 +79,7 @@ export function validateTelegramInitData(initData: string, botToken: string): { 
  * Get validated user ID from initData
  * Returns the Telegram user ID as a string for use as userId
  */
-export function getUserIdFromInitData(initData: string, botToken: string): string | null {
+export function getUserIdFromInitData(initData, botToken) {
   const validation = validateTelegramInitData(initData, botToken);
   if (!validation.valid || !validation.user) {
     return null;
