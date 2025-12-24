@@ -15,10 +15,15 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
 
   // ===== CONNECT =====
   useEffect(() => {
-    if (!roomId || !userId || !username) return;
+    // Guard clause: не подключаться пока нет всех параметров
+    if (!roomId || !userId || !username) {
+      console.log('⏳ Waiting for connection params:', { roomId: !!roomId, userId: !!userId, username: !!username });
+      return;
+    }
     if (hasConnectedRef.current) return;
 
     hasConnectedRef.current = true;
+    console.log('🔗 Ready to connect with params:', { roomId, userId, username });
 
     const getWebSocketURL = () => {
       if (typeof window === 'undefined') return '';
@@ -42,6 +47,8 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
 
       // Получаем initData для валидации на сервере
       const initData = getTelegramInitData();
+      
+      console.log('📤 Sending join_room:', { userId, roomId, username, hasInitData: !!initData });
 
       ws.send(JSON.stringify({
         type: 'join_room',

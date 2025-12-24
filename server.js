@@ -311,6 +311,7 @@ wss.on('connection', (ws) => {
           // ===== TELEGRAM VALIDATION (если initData предоставлен) =====
           // Если игрок присоединяется из Telegram WebApp, валидируем initData
           let validatedUserId = userId;
+          let finalUsername = username;
           let inlineMessageId = null;
           
           if (initData) {
@@ -335,6 +336,14 @@ wss.on('connection', (ws) => {
               if (validation.user) {
                 validatedUserId = String(validation.user.id);
                 console.log(`✅ initData validated, Telegram user: ${validatedUserId}`);
+                
+                // ===== ПЕРЕОПРЕДЕЛЯЕМ username ПО ДАННЫМ ИЗ TELEGRAM =====
+                const u = validation.user;
+                finalUsername =
+                  (u.username && `@${u.username}`) ||
+                  [u.first_name, u.last_name].filter(Boolean).join(' ') ||
+                  `Player ${u.id}`;
+                console.log(`✅ Using Telegram identity: username=${finalUsername}, id=${validatedUserId}`);
               }
               
               // Извлекаем inline_message_id - это уникальный ключ для лобби в Telegram Game API
@@ -382,9 +391,9 @@ wss.on('connection', (ws) => {
             try { existing.ws.close(4000, 'Reconnected'); } catch {}
           }
 
-          console.log(`✅ Connecting ${validatedUserId} to room ${finalRoomId}`);
+          console.log(`✅ Connecting ${validatedUserId} to room ${finalRoomId}, username: ${finalUsername}`);
 
-          wsClients.set(validatedUserId, { ws, roomId: finalRoomId, userId: validatedUserId, username, character: null });
+          wsClients.set(validatedUserId, { ws, roomId: finalRoomId, userId: validatedUserId, username: finalUsername, character: null });
 
           // Сохраняем метаданные на ws для очистки
           ws._userId = validatedUserId;
@@ -402,7 +411,7 @@ wss.on('connection', (ws) => {
           }
 
           broadcastToRoom(finalRoomId);
-          console.log(`[${finalRoomId}] ${username} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
+          console.log(`[${finalRoomId}] ${finalUsername} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
           break;
         }
 
