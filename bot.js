@@ -49,11 +49,12 @@ const handleStartCommand = (msg) => {
 const handleNewGameCommand = async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
-  const userName = msg.from.first_name;
+  const userName = msg.from.first_name || 'Player';
+  const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
 
   try {
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    console.log(`🎮 Creating game ${roomId} in chat ${chatId}`);
+    console.log(`🎮 Creating game ${roomId} in chat ${chatId} (group: ${isGroup})`);
     
     // Optional: Log game creation to backend (non-critical)
     try {
@@ -76,11 +77,22 @@ const handleNewGameCommand = async (msg) => {
     }
     
     // Use query parameter (?roomId=...) instead of hash (#roomId=...)
-    // userId and username will be extracted from Telegram WebApp on the client side
     const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
     console.log(`📍 Game URL: ${gameUrl}`);
     
-    const messageOptions = {
+    // For groups: Use Markdown instead of HTML and simple URL button
+    // For private chats: Use HTML with web_app button for Mini App experience
+    const messageOptions = isGroup ? {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[
+          { 
+            text: '🎮 Join Game',
+            url: gameUrl
+          }
+        ]]
+      }
+    } : {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [[
@@ -92,7 +104,13 @@ const handleNewGameCommand = async (msg) => {
       }
     };
 
-    const messageText = 
+    const messageText = isGroup ?
+      `🎮 *New Game Created!*\n\n` +
+      `👤 Created by: *${userName}*\n` +
+      `🆔 Game ID: \`${roomId}\`\n\n` +
+      `🎯 Waiting for players...\n` +
+      `2\\+ players needed to start!`
+      : 
       `🎮 <b>New Game Created!</b>\n\n` +
       `👤 Created by: <b>${userName}</b>\n` +
       `🆔 Game ID: <code>${roomId}</code>\n\n` +
@@ -100,7 +118,7 @@ const handleNewGameCommand = async (msg) => {
       `2+ players needed to start!`;
 
     await bot.sendMessage(chatId, messageText, messageOptions);
-    console.log(`✅ Game message sent with web_app to chat ${chatId}`);
+    console.log(`✅ Game message sent to chat ${chatId} (type: ${isGroup ? 'group' : 'private'})`);
 
   } catch (error) {
     console.error('❌ Error in handleNewGameCommand:', error.message);
