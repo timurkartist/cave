@@ -102,6 +102,8 @@ bot.on('inline_query', async (q) => {
 
     console.log(`📱 Inline query from user ${q.from.id}, URL: ${url}`);
 
+    // ВАЖНО: В inline_query нельзя использовать web_app кнопки!
+    // Используем обычный url с openURL
     const results = [{
       type: 'article',
       id: 'keepitall_inline',
@@ -110,7 +112,7 @@ bot.on('inline_query', async (q) => {
       input_message_content: { message_text: '🎮 KEEPITALL' },
       reply_markup: {
         inline_keyboard: [[
-          { text: '🎮 Open game', web_app: { url } }
+          { text: '🎮 Open game', url }
         ]]
       }
     }];
