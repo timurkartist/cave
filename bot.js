@@ -41,25 +41,20 @@ const handleNewGameCommand = async (msg) => {
   const userName = msg.from.first_name;
 
   try {
-    // ===== Генерируем короткий уникальный roomId =====
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     
-    // Отправляем на сервер для регистрации
     try {
-      const response = await axios.post(`${API_URL}/api/telegram/register-game`, {
+      await axios.post(`${API_URL}/api/telegram/register-game`, {
         roomId,
         chatId,
         creatorId: userId,
         creatorName: userName
       });
-      console.log('✅ Game registered:', response.data);
+      console.log('✅ Game registered:', roomId);
     } catch (error) {
       console.warn('⚠️ Could not register game on server:', error.message);
-      // Продолжаем всё равно - это не критично
     }
     
-    // ===== ЖЕЛЕЗОБЕТОННО: Используем hash (#roomId=...) вместо query параметров =====
-    // Это работает через ngrok прокси, в отличие от query параметров которые удаляются
     const gameUrl = `${APP_URL}/#roomId=${roomId}`;
     
     const messageOptions = {
@@ -80,21 +75,19 @@ const handleNewGameCommand = async (msg) => {
       `🆔 Game ID: ${roomId}\n\n` +
       `Click the button below to join!`;
 
-    bot.sendMessage(chatId, messageText, messageOptions)
-      .then(() => {
-        console.log(`✅ Game lobby link sent to chat ${chatId} by ${userName}`);
-        console.log(`📍 Room ID: ${roomId}`);
-      })
-      .catch(err => {
-        console.error(`❌ Error sending message to chat ${chatId}:`, err.message);
-      });
+    await bot.sendMessage(chatId, messageText, messageOptions);
+    console.log(`✅ Game lobby link sent to chat ${chatId} by ${userName}`);
+    console.log(`📍 Room ID: ${roomId}`);
 
   } catch (error) {
     console.error('Error creating game:', error.message);
-    bot.sendMessage(chatId, '❌ Failed to create game. Try again later.')
-      .catch(err => console.error('Error sending error message:', err.message));
+    try {
+      await bot.sendMessage(chatId, '❌ Failed to create game. Try again later.');
+    } catch (err) {
+      console.error('Error sending error message:', err.message);
+    }
   }
-});
+};
 
 // Функция обработки команды /help
 const handleHelpCommand = (msg) => {
@@ -118,8 +111,10 @@ const handleHelpCommand = (msg) => {
 // Функция обработки неизвестных команд
 const handleUnknownCommand = (msg) => {
   const chatId = msg.chat.id;
-  const command = msg.text.match(/^\/(\w+)/)[1];
+  const match = msg.text.match(/^\/(\w+)/);
+  if (!match) return;
   
+  const command = match[1];
   if (!['start', 'newgame', 'help'].includes(command)) {
     bot.sendMessage(chatId, 
       `❓ Unknown command: /${command}\n\n` +
@@ -131,12 +126,10 @@ const handleUnknownCommand = (msg) => {
 // Обработка всех сообщений (работает в личных чатах и группах)
 bot.on('message', (msg) => {
   const text = msg.text || '';
-  console.log(`📨 Message from ${msg.from.first_name} (${msg.chat.id}): "${text}"`);
   
-  // Игнорируем сообщения без текста
   if (!text) return;
   
-  // Обработка команд (поддерживаем оба формата: /command и /command@BotName)
+  // Обработка команд
   if (text === '/start' || text === '/start@CaveOfGreedBot') {
     handleStartCommand(msg);
   } else if (text === '/newgame' || text === '/newgame@CaveOfGreedBot') {
@@ -144,18 +137,17 @@ bot.on('message', (msg) => {
   } else if (text === '/help' || text === '/help@CaveOfGreedBot') {
     handleHelpCommand(msg);
   } else if (text.match(/^\/\w+/)) {
-    // Неизвестная команда
     handleUnknownCommand(msg);
   }
 });
 
 // Error handling
 bot.on('polling_error', (error) => {
-  console.error('Polling error:', error);
+  console.error('Polling error:', error.message);
 });
 
 bot.on('error', (error) => {
-  console.error('Bot error:', error);
+  console.error('Bot error:', error.message);
 });
 
 console.log('🤖 Telegram bot started');
