@@ -508,9 +508,12 @@ wss.on('connection', (ws) => {
             let nextIndex = (currentIndex + 1) % room.playerOrder.length;
             let nextPlayerId = room.playerOrder[nextIndex];
             
+            console.log(`[${room.roomId}] Finding next player: currentIndex=${currentIndex}, nextIndex=${nextIndex}, nextPlayerId=${nextPlayerId}, isInside=${room.players[nextPlayerId]?.isInside}`);
+            
             // Пропускаем игроков которые в лагере (не в экспедиции)
             let skippedCount = 0;
             while (!room.players[nextPlayerId]?.isInside && skippedCount < room.playerOrder.length) {
+              console.log(`[${room.roomId}] Skipping ${nextPlayerId} (not inside), skippedCount=${skippedCount}`);
               nextIndex = (nextIndex + 1) % room.playerOrder.length;
               nextPlayerId = room.playerOrder[nextIndex];
               skippedCount++;
