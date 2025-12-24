@@ -2,11 +2,13 @@ import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load environment variables
+const envFile = process.env.NODE_ENV === 'production' ? '.env.hetzner' : '.env';
+dotenv.config({ path: envFile });
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const API_URL = process.env.VITE_API_URL || 'https://quinquevalent-premillennially-britta.ngrok-free.dev';
-const APP_URL = process.env.TELEGRAM_APP_URL || process.env.VITE_APP_URL || 'https://quinquevalent-premillennially-britta.ngrok-free.dev';
+const API_URL = process.env.BACKEND_URL || process.env.VITE_API_URL || 'https://keep-it-all.com/api';
+const APP_URL = process.env.FRONTEND_URL || process.env.VITE_APP_URL || 'https://keep-it-all.com';
 
 if (!BOT_TOKEN) {
   console.error('❌ TELEGRAM_BOT_TOKEN not set in .env');
