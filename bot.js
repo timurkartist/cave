@@ -42,20 +42,23 @@ const handleNewGameCommand = async (msg) => {
 
   try {
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    console.log(`🎮 Creating game ${roomId} in chat ${chatId}`);
     
     try {
-      await axios.post(`${API_URL}/api/telegram/register-game`, {
+      const response = await axios.post(`${API_URL}/api/telegram/register-game`, {
         roomId,
         chatId,
         creatorId: userId,
         creatorName: userName
       });
-      console.log('✅ Game registered:', roomId);
+      console.log('✅ Game registered on server:', roomId);
     } catch (error) {
-      console.warn('⚠️ Could not register game on server:', error.message);
+      console.warn('⚠️ Server registration failed:', error.response?.status, error.message);
+      // Continue anyway - game creation is not critical
     }
     
     const gameUrl = `${APP_URL}/#roomId=${roomId}`;
+    console.log(`📍 Game URL: ${gameUrl}`);
     
     const messageOptions = {
       parse_mode: 'HTML',
@@ -76,15 +79,15 @@ const handleNewGameCommand = async (msg) => {
       `Click the button below to join!`;
 
     await bot.sendMessage(chatId, messageText, messageOptions);
-    console.log(`✅ Game lobby link sent to chat ${chatId} by ${userName}`);
-    console.log(`📍 Room ID: ${roomId}`);
+    console.log(`✅ Game message sent to chat ${chatId}`);
 
   } catch (error) {
-    console.error('Error creating game:', error.message);
+    console.error('❌ Error in handleNewGameCommand:', error.message);
+    console.error('Stack:', error.stack);
     try {
-      await bot.sendMessage(chatId, '❌ Failed to create game. Try again later.');
+      await bot.sendMessage(msg.chat.id, '❌ Failed to create game. Try again later.');
     } catch (err) {
-      console.error('Error sending error message:', err.message);
+      console.error('❌ Error sending error message:', err.message);
     }
   }
 };
