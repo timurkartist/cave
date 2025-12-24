@@ -74,26 +74,46 @@ export default function App() {
       let userIdValue: string | null = null;
       let usernameValue: string | null = null;
 
-      // Приоритет 1: Query string параметры (?roomId=...) - теперь главный источник
       const urlParams = new URLSearchParams(window.location.search);
-      roomIdValue = urlParams.get('roomId');
-
-      // Приоритет 2: Fallback на hash (#roomId=...) для обратной совместимости
-      if (!roomIdValue) {
-        const hash = window.location.hash.substring(1); // Удаляем #
-        const hashParams = new URLSearchParams(hash);
-        roomIdValue = hashParams.get('roomId');
-      }
-
-      // ===== TELEGRAM-FIRST IDENTITY =====
-      // Приоритет: Telegram user data > URL параметры > сгенерированные значения
+      
+      // Check for startapp parameter (from Telegram Mini App main button)
+      const startApp = urlParams.get('startapp');
       const telegramIdentity = getTelegramIdentity();
       
-      userIdValue = urlParams.get('userId') || telegramIdentity.userId;
-      usernameValue = urlParams.get('username') || telegramIdentity.username;
+      userIdValue = telegramIdentity.userId;
+      usernameValue = telegramIdentity.username;
 
-      if (!roomIdValue) {
-        roomIdValue = `room-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      // ===== ROOM ID LOGIC =====
+      // If startapp=group: use chat_instance from Telegram (all group members share same room)
+      // If startapp=solo: generate unique room for solo play
+      // Fallback: use query roomId or hash
+      
+      if (startApp === 'group' && window.Telegram?.WebApp?.initDataUnsafe?.chat) {
+        // Group mode: deterministic room based on chat_id
+        const chatId = window.Telegram.WebApp.initDataUnsafe.chat.id;
+        // Use MD5-like approach: create stable hash from chat_id
+        const hashString = Array.from(`chat_${chatId}`).reduce((h, c) => {
+          return ((h << 5) - h + c.charCodeAt(0)) | 0;
+        }, 0).toString(16);
+        roomIdValue = `GROUP_${Math.abs(hashString).substring(0, 8).toUpperCase()}`;
+        console.log(`📍 Group game mode - chat_id: ${chatId}, roomId: ${roomIdValue}`);
+      } else if (startApp === 'solo') {
+        // Solo mode: always new room
+        roomIdValue = `SOLO_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        console.log(`🎮 Solo game mode - roomId: ${roomIdValue}`);
+      } else {
+        // Fallback: use explicit roomId from URL
+        roomIdValue = urlParams.get('roomId');
+        
+        if (!roomIdValue) {
+          const hash = window.location.hash.substring(1);
+          const hashParams = new URLSearchParams(hash);
+          roomIdValue = hashParams.get('roomId');
+        }
+        
+        if (!roomIdValue) {
+          roomIdValue = `room-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        }
       }
 
       setRoomCode(roomIdValue);
@@ -109,7 +129,9 @@ export default function App() {
         inTelegram: telegramIdentity.inTelegram,
         userId: userIdValue,
         username: usernameValue,
-        roomId: roomIdValue
+        roomId: roomIdValue,
+        chatType: window.Telegram?.WebApp?.initDataUnsafe?.chat?.type,
+        startapp
       });
     }
   }, []);
