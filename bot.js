@@ -17,8 +17,28 @@ if (!BOT_TOKEN) {
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// Обработка команды /start
-bot.onText(/\/start/, (msg) => {
+// Обработка всех команд через message event (поддержка групп)
+bot.on('message', (msg) => {
+  const text = msg.text || '';
+  
+  // Игнорируем сообщения без текста
+  if (!text) return;
+  
+  // Обработка команд
+  if (text === '/start' || text === '/start@CaveOfGreedBot') {
+    handleStartCommand(msg);
+  } else if (text === '/newgame' || text === '/newgame@CaveOfGreedBot') {
+    handleNewGameCommand(msg);
+  } else if (text === '/help' || text === '/help@CaveOfGreedBot') {
+    handleHelpCommand(msg);
+  } else if (text.match(/^\/\w+/)) {
+    // Неизвестная команда
+    handleUnknownCommand(msg);
+  }
+});
+
+// Функция обработки команды /start
+const handleStartCommand = (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   
@@ -32,10 +52,10 @@ bot.onText(/\/start/, (msg) => {
       ]]
     }}
   );
-});
+};
 
-// Обработка команды /newgame
-bot.onText(/\/newgame/, async (msg) => {
+// Функция обработки команды /newgame
+const handleNewGameCommand = async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const userName = msg.from.first_name;
@@ -95,6 +115,38 @@ bot.onText(/\/newgame/, async (msg) => {
       .catch(err => console.error('Error sending error message:', err.message));
   }
 });
+
+// Функция обработки команды /help
+const handleHelpCommand = (msg) => {
+  const chatId = msg.chat.id;
+  
+  bot.sendMessage(chatId,
+    '📖 *Commands:*\n\n' +
+    '/start - Show welcome message\n' +
+    '/newgame - Create new game session\n' +
+    '/help - Show this help message\n\n' +
+    '🎮 *How to play:*\n' +
+    '1. Use /newgame to create a game\n' +
+    '2. Share the game with friends\n' +
+    '3. Each player joins via the button\n' +
+    '4. Once 2+ players join, game starts\n' +
+    '5. Explore the cave and collect treasure!',
+    { parse_mode: 'Markdown' }
+  );
+};
+
+// Обработка неизвестных команд
+const handleUnknownCommand = (msg) => {
+  const chatId = msg.chat.id;
+  const command = msg.text.match(/^\/(\w+)/)[1];
+  
+  if (!['start', 'newgame', 'help'].includes(command)) {
+    bot.sendMessage(chatId, 
+      `❓ Unknown command: /${command}\n\n` +
+      `Use /help to see available commands.`
+    );
+  }
+};
 
 // Обработка команды /help
 bot.onText(/\/help/, (msg) => {
