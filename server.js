@@ -384,7 +384,7 @@ wss.on('connection', (ws) => {
           ws._userId = validatedUserId;
           ws._roomId = finalRoomId;
 
-          const room = wsRooms.get(roomId);
+          const room = wsRooms.get(finalRoomId);
           
           // ✅ Первый игрок становится creator
           if (!room.createdBy) {
@@ -395,8 +395,8 @@ wss.on('connection', (ws) => {
             room.players[validatedUserId] = { isInside: true, bankedTotal: 0, roundStash: 0 };
           }
 
-          broadcastToRoom(roomId);
-          console.log(`[${roomId}] ${username} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
+          broadcastToRoom(finalRoomId);
+          console.log(`[${finalRoomId}] ${username} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
           break;
         }
 
