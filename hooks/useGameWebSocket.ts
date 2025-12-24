@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getTelegramInitData } from '../utils/telegramUtils';
 
 export function useGameWebSocket(roomId: string, userId: string, username: string) {
   const [roomState, setRoomState] = useState<any>(null);
@@ -42,10 +43,14 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
       setConnected(true);
       setError(null);
 
+      // Получаем initData для валидации на сервере
+      const initData = getTelegramInitData();
+
       ws.send(JSON.stringify({
         type: 'join_room',
         userId,
-        payload: { roomId, username }
+        payload: { roomId, username },
+        initData  // Отправляем для серверной валидации
       }));
     };
 

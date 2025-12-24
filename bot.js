@@ -58,6 +58,7 @@ const handleNewGameCommand = async (msg) => {
     }
     
     // Use query parameter (?roomId=...) instead of hash (#roomId=...)
+    // userId and username will be extracted from Telegram WebApp on the client side
     const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
     console.log(`📍 Game URL: ${gameUrl}`);
     

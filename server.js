@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { CardType, HazardType } from './types.js';
+import { validateTelegramInitData } from './utils/telegramValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -300,36 +301,66 @@ wss.on('connection', (ws) => {
       switch (type) {
         case 'join_room': {
           const { roomId, username } = payload;
+          const initData = message.initData; // Получаем initData для валидации
+
+          // ===== TELEGRAM VALIDATION (если initData предоставлен) =====
+          // Если игрок присоединяется из Telegram WebApp, валидируем initData
+          let validatedUserId = userId;
+          if (initData) {
+            const botToken = process.env.TELEGRAM_BOT_TOKEN;
+            if (!botToken) {
+              console.warn('⚠️ TELEGRAM_BOT_TOKEN not set, skipping initData validation');
+            } else {
+              const validation = validateTelegramInitData(initData, botToken);
+              if (!validation.valid) {
+                console.warn(`❌ initData validation failed for userId: ${userId}`);
+                try {
+                  ws.send(JSON.stringify({
+                    type: 'error',
+                    payload: { message: 'Invalid Telegram credentials' }
+                  }));
+                } catch {}
+                ws.close(4001, 'Invalid credentials');
+                return;
+              }
+              
+              // Используем валидированный userId из Telegram
+              if (validation.user) {
+                validatedUserId = String(validation.user.id);
+                console.log(`✅ initData validated, Telegram user: ${validatedUserId}`);
+              }
+            }
+          }
 
           if (!wsRooms.has(roomId)) {
             wsRooms.set(roomId, createRoomState(roomId));
           }
 
           // Если userId уже существует - закрываем старый сокет
-          const existing = wsClients.get(userId);
+          const existing = wsClients.get(validatedUserId);
           if (existing && existing.ws && existing.ws !== ws) {
             try { existing.ws.close(4000, 'Reconnected'); } catch {}
           }
 
-          wsClients.set(userId, { ws, roomId, userId, username, character: null });
+          wsClients.set(validatedUserId, { ws, roomId, userId: validatedUserId, username, character: null });
 
           // Сохраняем метаданные на ws для очистки
-          ws._userId = userId;
+          ws._userId = validatedUserId;
           ws._roomId = roomId;
 
           const room = wsRooms.get(roomId);
           
           // ✅ Первый игрок становится creator
           if (!room.createdBy) {
-            room.createdBy = userId;
+            room.createdBy = validatedUserId;
           }
           
-          if (!room.players[userId]) {
-            room.players[userId] = { isInside: true, bankedTotal: 0, roundStash: 0 };
+          if (!room.players[validatedUserId]) {
+            room.players[validatedUserId] = { isInside: true, bankedTotal: 0, roundStash: 0 };
           }
 
           broadcastToRoom(roomId);
-          console.log(`[${roomId}] ${username} joined (creator: ${room.createdBy === userId})`);
+          console.log(`[${roomId}] ${username} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
           break;
         }
 

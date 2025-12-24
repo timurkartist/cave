@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GameState, Player, GameCard, CardType } from './types';
 import { HAZARD_ICONS } from './constants';
 import { useGameWebSocket } from './hooks/useGameWebSocket';
+import { getTelegramIdentity } from './utils/telegramUtils';
 
 const GRID_WIDTH = 4;
 const TOTAL_ROUNDS = 5;
@@ -66,7 +67,7 @@ export default function App() {
     username
   );
 
-  // ===== ИНИЦИАЛИЗАЦИЯ USER ID / ROOM CODE ИЗ URL =====
+  // ===== ИНИЦИАЛИЗАЦИЯ USER ID / ROOM CODE ИЗ URL И TELEGRAM =====
   useEffect(() => {
     if (typeof window !== 'undefined') {
       let roomIdValue: string | null = null;
@@ -84,14 +85,12 @@ export default function App() {
         roomIdValue = hashParams.get('roomId');
       }
 
-      userIdValue = urlParams.get('userId');
-      usernameValue = urlParams.get('username');
-
-      // Генерируем если нет
-      if (!userIdValue) {
-        userIdValue = `user-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-        usernameValue = `Player_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      }
+      // ===== TELEGRAM-FIRST IDENTITY =====
+      // Приоритет: Telegram user data > URL параметры > сгенерированные значения
+      const telegramIdentity = getTelegramIdentity();
+      
+      userIdValue = urlParams.get('userId') || telegramIdentity.userId;
+      usernameValue = urlParams.get('username') || telegramIdentity.username;
 
       if (!roomIdValue) {
         roomIdValue = `room-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -105,6 +104,13 @@ export default function App() {
       sessionStorage.setItem('roomId', roomIdValue);
       sessionStorage.setItem('userId', userIdValue);
       sessionStorage.setItem('username', usernameValue);
+
+      console.log('🔐 Identity:', {
+        inTelegram: telegramIdentity.inTelegram,
+        userId: userIdValue,
+        username: usernameValue,
+        roomId: roomIdValue
+      });
     }
   }, []);
 
