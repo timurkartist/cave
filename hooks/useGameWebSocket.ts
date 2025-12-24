@@ -22,13 +22,14 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
     const getWebSocketURL = () => {
       if (typeof window === 'undefined') return '';
       const { hostname, protocol } = window.location;
+      const wsProto = protocol === 'https:' ? 'wss' : 'ws';
 
       if (hostname.includes('ngrok')) {
         return `wss://${hostname}`;
       }
 
-      const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${wsProtocol}//${hostname}:3001`;
+      // PROD через nginx на 443, а не на :3001
+      return `${wsProto}://${hostname}/api/`;
     };
 
     const wsUrl = getWebSocketURL();
