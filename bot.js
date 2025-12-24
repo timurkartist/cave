@@ -23,14 +23,20 @@ const handleStartCommand = (msg) => {
   const userId = msg.from.id;
   
   bot.sendMessage(chatId, 
-    '🎮 *Welcome to Cave of Greed!*\n\n' +
-    'A multiplayer treasure hunting game\n\n' +
-    'Use /newgame to start a new game session with your friends!',
-    { parse_mode: 'Markdown', reply_markup: {
-      inline_keyboard: [[
-        { text: '🎮 Play Solo', web_app: { url: `${APP_URL}?mode=solo&userId=${userId}` } }
-      ]]
-    }}
+    '🎮 <b>Welcome to Cave of Greed!</b>\n\n' +
+    '🏴‍☠️ <i>A multiplayer treasure hunting game</i>\n\n' +
+    '⚡ <b>Quick Start:</b>\n' +
+    '• <b>/newgame</b> - Create game in this chat\n' +
+    '• <b>@CaveOfGreedBot</b> - Use inline mode in any chat\n\n' +
+    '📖 Use /help for full commands',
+    { 
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🎮 Play Solo', web_app: { url: `${APP_URL}?mode=solo&userId=${userId}` } }
+        ]]
+      }
+    }
   );
 };
 
@@ -75,10 +81,11 @@ const handleNewGameCommand = async (msg) => {
     };
 
     const messageText = 
-      `🎮 New Game Created!\n\n` +
-      `👤 Created by: ${userName}\n` +
-      `🆔 Game ID: ${roomId}\n\n` +
-      `Click the button below to join!`;
+      `🎮 <b>New Game Created!</b>\n\n` +
+      `👤 Created by: <b>${userName}</b>\n` +
+      `🆔 Game ID: <code>${roomId}</code>\n\n` +
+      `🎯 Waiting for players...\n` +
+      `2+ players needed to start!`;
 
     await bot.sendMessage(chatId, messageText, messageOptions);
     console.log(`✅ Game message sent with web_app to chat ${chatId}`);
@@ -99,17 +106,18 @@ const handleHelpCommand = (msg) => {
   const chatId = msg.chat.id;
   
   bot.sendMessage(chatId,
-    '📖 *Commands:*\n\n' +
-    '/start - Show welcome message\n' +
-    '/newgame - Create new game session\n' +
-    '/help - Show this help message\n\n' +
-    '🎮 *How to play:*\n' +
-    '1. Use /newgame to create a game\n' +
-    '2. Share the game with friends\n' +
-    '3. Each player joins via the button\n' +
-    '4. Once 2+ players join, game starts\n' +
-    '5. Explore the cave and collect treasure!',
-    { parse_mode: 'Markdown' }
+    '📖 <b>Commands:</b>\n\n' +
+    '<b>/start</b> - Show welcome message\n' +
+    '<b>/newgame</b> - Create new game session\n' +
+    '<b>/help</b> - Show this help message\n\n' +
+    '🎮 <b>How to play:</b>\n' +
+    '1. Use <b>/newgame</b> in any chat\n' +
+    '2. Other players click <b>Join Game Lobby</b>\n' +
+    '3. Select your character emoji\n' +
+    '4. Game starts when 2+ players ready\n' +
+    '5. Explore the cave 🕳️ collect treasure 💎\n\n' +
+    '💡 <b>Tip:</b> Type <b>@CaveOfGreedBot</b> in any chat to create a game inline!',
+    { parse_mode: 'HTML' }
   );
 };
 
@@ -151,30 +159,49 @@ bot.on('polling_error', (error) => {
   console.error('Polling error:', error.message);
 });
 
-// Inline query handler - для использования бота без добавления в группу
+// Inline query handler - для использования бота без добавления в группу (@BotName)
 bot.on('inline_query', (query) => {
-  const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
-  
-  const results = [
-    {
-      type: 'article',
-      id: roomId,
-      title: '🎮 Create New Game',
-      description: `Game ID: ${roomId}`,
-      input_message_content: {
-        message_text: `🎮 New Game Lobby\n\n🆔 Game ID: ${roomId}\n\nJoin: ${gameUrl}`,
-        parse_mode: 'HTML'
-      },
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '🎮 Join Game', web_app: { url: gameUrl } }
-        ]]
+  try {
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
+    
+    console.log(`📱 Inline query: creating game ${roomId}`);
+    
+    const results = [
+      {
+        type: 'article',
+        id: roomId,
+        title: '🎮 Cave of Greed - Treasure Hunt',
+        description: '🏴‍☠️ Explore the cave and collect treasure with friends',
+        thumb_url: 'https://via.placeholder.com/100?text=Game',
+        input_message_content: {
+          message_text: 
+            `🎮 <b>New Game Lobby</b>\n\n` +
+            `🆔 Game ID: <code>${roomId}</code>\n` +
+            `👥 Invite friends to join!\n\n` +
+            `Click the button below to start exploring...`,
+          parse_mode: 'HTML'
+        },
+        reply_markup: {
+          inline_keyboard: [[
+            {
+              text: '🎮 Start Game',
+              web_app: { url: gameUrl }
+            }
+          ]]
+        }
       }
-    }
-  ];
-  
-  bot.answerInlineQuery(query.id, results);
+    ];
+    
+    bot.answerInlineQuery(query.id, results, {
+      cache_time: 0,  // Don't cache - each query should be fresh
+      is_personal: true
+    });
+    
+    console.log(`✅ Inline result sent for game ${roomId}`);
+  } catch (error) {
+    console.error('❌ Error in inline_query:', error.message);
+  }
 });
 
 bot.on('error', (error) => {
