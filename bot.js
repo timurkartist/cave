@@ -60,7 +60,6 @@ const handleNewGameCommand = async (msg) => {
     const gameUrl = `${APP_URL}/#roomId=${roomId}`;
     console.log(`📍 Game URL: ${gameUrl}`);
     
-    // Try web_app format first (for Telegram Bot API 6.4+)
     const messageOptions = {
       parse_mode: 'HTML',
       reply_markup: {
@@ -79,26 +78,8 @@ const handleNewGameCommand = async (msg) => {
       `🆔 Game ID: ${roomId}\n\n` +
       `Click the button below to join!`;
 
-    try {
-      await bot.sendMessage(chatId, messageText, messageOptions);
-      console.log(`✅ Game message sent with web_app to chat ${chatId}`);
-    } catch (webAppError) {
-      // Fallback to regular URL if web_app fails
-      console.warn('⚠️ web_app failed, using fallback url:', webAppError.message);
-      const fallbackOptions = {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[
-            { 
-              text: '🎮 Join Game Lobby',
-              url: gameUrl
-            }
-          ]]
-        }
-      };
-      await bot.sendMessage(chatId, messageText, fallbackOptions);
-      console.log(`✅ Game message sent with fallback url to chat ${chatId}`);
-    }
+    await bot.sendMessage(chatId, messageText, messageOptions);
+    console.log(`✅ Game message sent with web_app to chat ${chatId}`);
 
   } catch (error) {
     console.error('❌ Error in handleNewGameCommand:', error.message);
