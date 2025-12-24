@@ -306,6 +306,8 @@ wss.on('connection', (ws) => {
           const { roomId, username } = payload;
           const initData = message.initData; // Получаем initData для валидации
 
+          console.log(`📥 join_room: username=${username}, roomId=${roomId}, initData=${!!initData}`);
+
           // ===== TELEGRAM VALIDATION (если initData предоставлен) =====
           // Если игрок присоединяется из Telegram WebApp, валидируем initData
           let validatedUserId = userId;
@@ -376,8 +378,11 @@ wss.on('connection', (ws) => {
           // Если userId уже существует - закрываем старый сокет
           const existing = wsClients.get(validatedUserId);
           if (existing && existing.ws && existing.ws !== ws) {
+            console.log(`⚠️ Closing existing connection for ${validatedUserId}, old room: ${existing.roomId}`);
             try { existing.ws.close(4000, 'Reconnected'); } catch {}
           }
+
+          console.log(`✅ Connecting ${validatedUserId} to room ${finalRoomId}`);
 
           wsClients.set(validatedUserId, { ws, roomId: finalRoomId, userId: validatedUserId, username, character: null });
 
