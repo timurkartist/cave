@@ -31,6 +31,7 @@ function isWsOpen(ws) {
 // ===== GAME STATE =====
 const wsRooms = new Map(); // { roomId → roomState }
 const wsClients = new Map(); // { userId → { ws, roomId, username, character } }
+const inlineMessageToRoom = new Map(); // { inline_message_id → roomId } - маппинг для inline игр
 
 // Deck initialization
 const INITIAL_DECK = [
@@ -306,6 +307,8 @@ wss.on('connection', (ws) => {
           // ===== TELEGRAM VALIDATION (если initData предоставлен) =====
           // Если игрок присоединяется из Telegram WebApp, валидируем initData
           let validatedUserId = userId;
+          let inlineMessageId = null;
+          
           if (initData) {
             const botToken = process.env.TELEGRAM_BOT_TOKEN;
             if (!botToken) {
@@ -329,11 +332,36 @@ wss.on('connection', (ws) => {
                 validatedUserId = String(validation.user.id);
                 console.log(`✅ initData validated, Telegram user: ${validatedUserId}`);
               }
+              
+              // Извлекаем inline_message_id для маппинга комнат в inline режиме
+              if (validation.user && validation.inlineMessageId) {
+                inlineMessageId = validation.inlineMessageId;
+              }
             }
           }
 
-          if (!wsRooms.has(roomId)) {
-            wsRooms.set(roomId, createRoomState(roomId));
+          // Если есть inline_message_id - используем его как ключ комнаты для inline игр
+          let finalRoomId = roomId;
+          if (inlineMessageId) {
+            // Проверяем есть ли уже комната для этого inline_message_id
+            if (inlineMessageToRoom.has(inlineMessageId)) {
+              finalRoomId = inlineMessageToRoom.get(inlineMessageId);
+              console.log(`📍 Inline game: reusing room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
+            } else {
+              // Создаём новую комнату с инлайн ID
+              finalRoomId = `GAME_${inlineMessageId.substring(0, 20).toUpperCase()}`;
+              inlineMessageToRoom.set(inlineMessageId, finalRoomId);
+              console.log(`📍 Inline game: created room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
+            }
+          } else if (!roomId || roomId === 'GAME_TEMP') {
+            // Если roomId пустой или временный - используем сгенерированный
+            // Это происходит когда Telegram Game API не передаёт параметры
+            finalRoomId = `GAME_${Date.now().toString(36).toUpperCase()}_${validatedUserId}`;
+            console.log(`⚠️ No inline_message_id, generated room: ${finalRoomId}`);
+          }
+
+          if (!wsRooms.has(finalRoomId)) {
+            wsRooms.set(finalRoomId, createRoomState(finalRoomId));
           }
 
           // Если userId уже существует - закрываем старый сокет
@@ -342,11 +370,11 @@ wss.on('connection', (ws) => {
             try { existing.ws.close(4000, 'Reconnected'); } catch {}
           }
 
-          wsClients.set(validatedUserId, { ws, roomId, userId: validatedUserId, username, character: null });
+          wsClients.set(validatedUserId, { ws, roomId: finalRoomId, userId: validatedUserId, username, character: null });
 
           // Сохраняем метаданные на ws для очистки
           ws._userId = validatedUserId;
-          ws._roomId = roomId;
+          ws._roomId = finalRoomId;
 
           const room = wsRooms.get(roomId);
           

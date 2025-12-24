@@ -106,25 +106,10 @@ export default function App() {
         
         // Если это Telegram Game API
         if (startAppParam === 'game') {
-          // Параметр может быть в разных местах из-за того, как Telegram обрабатывает URL
-          let roomKey = roomKeyFromHash || gameInstance;
-          
-          // Fallback: используем inline_message_id если доступен
-          if (!roomKey && window.Telegram?.WebApp?.initDataUnsafe) {
-            const inlineMessageId = window.Telegram.WebApp.initDataUnsafe.inline_message_id;
-            if (inlineMessageId) {
-              roomKey = `msg_${inlineMessageId}`;
-            }
-          }
-          
-          if (roomKey) {
-            roomIdValue = `GAME_${roomKey.substring(0, 20).toUpperCase()}`;
-            console.log(`🎮 Telegram Game API mode - room key: ${roomKey}, roomId: ${roomIdValue}`);
-          } else {
-            // Fallback if no room key at all
-            roomIdValue = `GAME_${Date.now().toString(36).toUpperCase()}`;
-            console.log(`🎮 Telegram Game API mode (no key) - generated roomId: ${roomIdValue}`);
-          }
+          // Telegram Game API: сервер определит комнату по inline_message_id из initData
+          // Отправляем пустой roomId или временный, сервер переопределит его
+          roomIdValue = 'GAME_TEMP';
+          console.log(`🎮 Telegram Game API mode - server will determine room from inline_message_id`);
         } else if (startAppParam === 'group' && chatData?.id) {
           // Group mode: используем chat.id для детерминированного roomId
           // Все в группе получат одинаковый roomId на основе chat_id
