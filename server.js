@@ -582,6 +582,7 @@ wss.on('connection', (ws) => {
             if (allDecided) {
               // Применяем результаты
               const { leavers, stayers, leaversGemsData } = handleDecisions(room);
+              console.log(`[${room.roomId}] After decisions: leavers=${leavers.length}, stayers=${stayers.length}`);
               room.decisionsResult = { decisions: room.currentDecisions, leavers, leaversGemsData };
               room.phase = 'RESULTS';
 
@@ -599,6 +600,7 @@ wss.on('connection', (ws) => {
                   room.currentTurnUserId = firstInsidePlayer || null;
                   console.log(`[${room.roomId}] Back to EXPEDITION, turn to: ${room.currentTurnUserId}`);
                 } else {
+                  console.log(`[${room.roomId}] All players left the mine! Going to ROUND_END`);
                   room.phase = 'ROUND_END';
                   room.nextRoundAcks = {}; // Очищаем для нового раунда
                 }
