@@ -19,7 +19,19 @@ app.use(cors({ origin: '*', credentials: true }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true });
+
+// Upgrade HTTP to WebSocket на пути /ws
+server.on('upgrade', (request, socket, head) => {
+  // Проверяем путь для WebSocket
+  if (request.url === '/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 
 // ws readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
 const WS_OPEN = WebSocketServer.OPEN ?? 1;

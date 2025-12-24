@@ -29,8 +29,8 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
         return `wss://${hostname}`;
       }
 
-      // PROD через nginx на 443 - WebSocket слушает на корне сервера
-      return `${wsProto}://${hostname}/`;
+      // PROD через nginx на 443 - WebSocket должен быть на /ws
+      return `${wsProto}://${hostname}/ws`;
     };
 
     const wsUrl = getWebSocketURL();
