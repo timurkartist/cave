@@ -733,18 +733,25 @@ wss.on('connection', (ws) => {
         // Если это был creator - переназначаем creator другому игроку в комнате
         if (rid) {
           const room = wsRooms.get(rid);
-          if (room && room.createdBy === uid) {
-            // Ищем другого живого игрока в комнате
-            const anotherPlayer = Array.from(wsClients.values()).find(
-              c => c.roomId === rid && c.userId !== uid
-            );
-            if (anotherPlayer) {
-              room.createdBy = anotherPlayer.userId;
-              console.log(`[${rid}] Creator changed to ${anotherPlayer.userId}`);
-            } else {
-              // Больше нет игроков - creator = null
-              room.createdBy = null;
-              console.log(`[${rid}] Room empty - creator reset`);
+          if (room) {
+            // Удаляем игрока из комнаты
+            delete room.players[uid];
+            console.log(`[${rid}] ${uid} removed from room.players`);
+            
+            // Переназначаем creator если нужно
+            if (room.createdBy === uid) {
+              // Ищем другого живого игрока в комнате
+              const anotherPlayer = Array.from(wsClients.values()).find(
+                c => c.roomId === rid && c.userId !== uid
+              );
+              if (anotherPlayer) {
+                room.createdBy = anotherPlayer.userId;
+                console.log(`[${rid}] Creator changed to ${anotherPlayer.userId}`);
+              } else {
+                // Больше нет игроков - creator = null
+                room.createdBy = null;
+                console.log(`[${rid}] Room empty - creator reset`);
+              }
             }
           }
           broadcastToRoom(rid);
@@ -762,16 +769,23 @@ wss.on('connection', (ws) => {
         // Переназначение creator при отключении
         if (c.roomId) {
           const room = wsRooms.get(c.roomId);
-          if (room && room.createdBy === scanUid) {
-            const anotherPlayer = Array.from(wsClients.values()).find(
-              cl => cl.roomId === c.roomId && cl.userId !== scanUid
-            );
-            if (anotherPlayer) {
-              room.createdBy = anotherPlayer.userId;
-              console.log(`[${c.roomId}] Creator changed to ${anotherPlayer.userId}`);
-            } else {
-              room.createdBy = null;
-              console.log(`[${c.roomId}] Room empty - creator reset`);
+          if (room) {
+            // Удаляем игрока из комнаты
+            delete room.players[scanUid];
+            console.log(`[${c.roomId}] ${scanUid} removed from room.players (fallback)`);
+            
+            // Переназначаем creator если нужно
+            if (room.createdBy === scanUid) {
+              const anotherPlayer = Array.from(wsClients.values()).find(
+                cl => cl.roomId === c.roomId && cl.userId !== scanUid
+              );
+              if (anotherPlayer) {
+                room.createdBy = anotherPlayer.userId;
+                console.log(`[${c.roomId}] Creator changed to ${anotherPlayer.userId}`);
+              } else {
+                room.createdBy = null;
+                console.log(`[${c.roomId}] Room empty - creator reset`);
+              }
             }
           }
           broadcastToRoom(c.roomId);
