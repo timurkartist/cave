@@ -640,8 +640,9 @@ wss.on('connection', (ws) => {
                 room.nextRoundAcks = {}; // Очищаем acknowledgments
                 // ✅ Переходим на первого игрока в порядке
                 room.currentTurnUserId = room.playerOrder[0] || null;
+                console.log(`[${room.roomId}] === Resetting isInside for new round ${room.round} ===`);
                 Object.entries(room.players).forEach(([userId, player]) => {
-                  console.log(`[${room.roomId}] Reset ${userId}: isInside = true, roundStash = 0`);
+                  console.log(`[${room.roomId}] Reset ${userId}: isInside = true (was ${player.isInside}), roundStash = 0`);
                   player.isInside = true;
                   player.roundStash = 0;
                 });
