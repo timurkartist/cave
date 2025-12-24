@@ -22,6 +22,25 @@ console.log(`  APP_URL: ${APP_URL}`);
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+// ===== IN-MEMORY GAME MESSAGE STORAGE =====
+// Map to track game messages and their roomIds
+// Key: "chatId:messageId" (for messages) or "inline:inlineMessageId" (for inline)
+// Value: roomId
+const gameMessages = new Map();
+
+// Cleanup function for old game sessions (older than 24 hours)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+  
+  for (const [key, value] of gameMessages.entries()) {
+    if (now - value.createdAt > maxAge) {
+      gameMessages.delete(key);
+      console.log(`🧹 Cleaned up old game: ${key}`);
+    }
+  }
+}, 60 * 60 * 1000); // Run cleanup every hour
+
 // Функция обработки команды /start
 const handleStartCommand = (msg) => {
   const chatId = msg.chat.id;
@@ -99,9 +118,20 @@ const handleNewGameCommand = async (msg) => {
       `🎯 Waiting for players...\n` +
       `2+ players needed to start!`;
 
-    await bot.sendMessage(chatId, messageText, messageOptions);
-    console.log(`✅ Game message sent with web_app to chat ${chatId}`);
-
+    const response = await bot.sendMessage(chatId, messageText, messageOptions);
+    const messageId = response.message_id;
+    
+    // Track this game message
+    const gameKey = `${chatId}:${messageId}`;
+    gameMessages.set(gameKey, {
+      roomId,
+      createdAt: Date.now(),
+      chatId,
+      messageId
+    });
+    
+    console.log(`✅ Game message sent with web_app to chat ${chatId}, tracked at ${gameKey}`);
+    
   } catch (error) {
     console.error('❌ Error in handleNewGameCommand:', error.message);
     console.error('Stack:', error.stack);
@@ -176,6 +206,7 @@ bot.on('inline_query', (query) => {
   try {
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const gameUrl = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
+    const inlineMessageKey = `inline:${roomId}`; // We'll update this later with actual inline_message_id
     
     console.log(`📱 Inline query: creating game ${roomId}`);
     
@@ -188,23 +219,15 @@ bot.on('inline_query', (query) => {
       }
     ];
     
-    // If game_short_name doesn't work, fallback to article with input_message_content
-    // (input_message_content doesn't support reply_markup with web_app)
-    if (!results || results.length === 0) {
-      results.push({
-        type: 'article',
-        id: roomId,
-        title: '🎮 Cave of Greed - Treasure Hunt',
-        description: '🏴‍☠️ Explore the cave and collect treasure with friends',
-        input_message_content: {
-          message_text: 
-            `🎮 <b>Game Lobby Created</b>\n\n` +
-            `🆔 Game ID: <code>${roomId}</code>\n` +
-            `📍 Join: ${gameUrl}`,
-          parse_mode: 'HTML'
-        }
-      });
-    }
+    // Pre-store the roomId with a temporary key
+    // When callback comes, we'll know the actual inline_message_id
+    gameMessages.set(inlineMessageKey, {
+      roomId,
+      createdAt: Date.now(),
+      isInline: true
+    });
+    
+    console.log(`📍 Inline game ${roomId} created and tracked at ${inlineMessageKey}`);
     
     bot.answerInlineQuery(query.id, results, {
       cache_time: 0,
@@ -217,7 +240,7 @@ bot.on('inline_query', (query) => {
   }
 });
 
-// Callback query handler - для кнопок Play на inline сообщениях
+// Callback query handler - для кнопок Play на inline сообщениях и web_app
 bot.on('callback_query', async (q) => {
   try {
     if (!q.game_short_name) {
@@ -225,15 +248,48 @@ bot.on('callback_query', async (q) => {
       return;
     }
 
-    console.log(`🎮 Play callback received, creating game...`);
+    console.log(`🎮 Play callback received for game ${q.id}`);
     
-    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    // Try to find existing roomId for this game
+    let roomId = null;
+    let gameData = null;
+    
+    // Check if it's from inline message
+    if (q.inline_message_id) {
+      const inlineKey = `inline:${q.id}`;
+      gameData = gameMessages.get(inlineKey);
+      if (gameData) {
+        roomId = gameData.roomId;
+        console.log(`📍 Found existing inline game: ${roomId}`);
+        
+        // Update the key to include actual inline_message_id for future lookups
+        gameMessages.delete(inlineKey);
+        const newKey = `inline:${q.inline_message_id}`;
+        gameMessages.set(newKey, gameData);
+      }
+    }
+    // Check if it's from regular message
+    else if (q.message && q.message.message_id) {
+      const chatId = q.message.chat.id;
+      const messageKey = `${chatId}:${q.message.message_id}`;
+      gameData = gameMessages.get(messageKey);
+      if (gameData) {
+        roomId = gameData.roomId;
+        console.log(`📍 Found existing chat game: ${roomId}`);
+      }
+    }
+    
+    // If no existing game found, create a new one (fallback)
+    if (!roomId) {
+      roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      console.log(`⚠️ No game found, creating new: ${roomId}`);
+    }
+    
     const url = `${APP_URL}/?roomId=${encodeURIComponent(roomId)}`;
-    
     console.log(`📍 Opening game ${roomId} at ${url}`);
 
     await bot.answerCallbackQuery(q.id, { url });
-    console.log(`✅ Callback query answered with game URL`);
+    console.log(`✅ Callback query answered - ${q.inline_message_id ? 'inline' : 'message'} game ${roomId}`);
   } catch (error) {
     console.error('❌ Error in callback_query:', error.message);
     try {
