@@ -115,6 +115,19 @@ const handleHelpCommand = (msg) => {
   );
 };
 
+// Функция обработки неизвестных команд
+const handleUnknownCommand = (msg) => {
+  const chatId = msg.chat.id;
+  const command = msg.text.match(/^\/(\w+)/)[1];
+  
+  if (!['start', 'newgame', 'help'].includes(command)) {
+    bot.sendMessage(chatId, 
+      `❓ Unknown command: /${command}\n\n` +
+      `Use /help to see available commands.`
+    );
+  }
+};
+
 // Обработка всех сообщений (работает в личных чатах и группах)
 bot.on('message', (msg) => {
   const text = msg.text || '';
