@@ -66,7 +66,7 @@ const handleNewGameCommand = async (msg) => {
         inline_keyboard: [[
           { 
             text: '🎮 Join Game Lobby',
-            web_app: { url: gameUrl }
+            url: gameUrl
           }
         ]]
       }
