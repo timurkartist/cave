@@ -25,12 +25,9 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
       const { hostname, protocol } = window.location;
       const wsProto = protocol === 'https:' ? 'wss' : 'ws';
 
-      if (hostname.includes('ngrok')) {
-        return `wss://${hostname}`;
-      }
-
-      // PROD через nginx на 443 - WebSocket должен быть на /ws
-      return `${wsProto}://${hostname}/ws`;
+      // WebSocket слушает на корне сервера (/)
+      // Nginx проксирует и передаёт upgrade headers
+      return `${wsProto}://${hostname}/`;
     };
 
     const wsUrl = getWebSocketURL();
