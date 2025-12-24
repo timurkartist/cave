@@ -215,6 +215,7 @@ function handleDecisions(room) {
       const totalGems = roundStash + gemsPerLeaver;
       leaversGemsData[userId] = { roundStash, pathShare: gemsPerLeaver, total: totalGems };
       
+      console.log(`[${room.roomId}] ${userId} left: roundStash=${roundStash}, pathShare=${gemsPerLeaver}, total=${totalGems}, isInside now=false`);
       room.players[userId].bankedTotal += totalGems;
       room.players[userId].roundStash = 0;
       room.players[userId].isInside = false;
@@ -639,7 +640,8 @@ wss.on('connection', (ws) => {
                 room.nextRoundAcks = {}; // Очищаем acknowledgments
                 // ✅ Переходим на первого игрока в порядке
                 room.currentTurnUserId = room.playerOrder[0] || null;
-                Object.entries(room.players).forEach(([_, player]) => {
+                Object.entries(room.players).forEach(([userId, player]) => {
+                  console.log(`[${room.roomId}] Reset ${userId}: isInside = true, roundStash = 0`);
                   player.isInside = true;
                   player.roundStash = 0;
                 });
