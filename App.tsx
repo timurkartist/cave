@@ -69,6 +69,7 @@ export default function App() {
 
   // ===== ИНИЦИАЛИЗАЦИЯ USER ID / ROOM CODE ИЗ URL И TELEGRAM =====
   useEffect(() => {
+    console.log('🚀 App initializing...');
     if (typeof window !== 'undefined') {
       let roomIdValue: string | null = null;
       let userIdValue: string | null = null;
@@ -78,7 +79,10 @@ export default function App() {
       
       // Check for startapp parameter (from Telegram Mini App main button)
       const startApp = urlParams.get('startapp');
+      console.log('📋 URL params:', { startapp: startApp, search: window.location.search });
+      
       const telegramIdentity = getTelegramIdentity();
+      console.log('📱 Telegram identity:', telegramIdentity);
       
       userIdValue = telegramIdentity.userId;
       usernameValue = telegramIdentity.username;
@@ -86,6 +90,7 @@ export default function App() {
       // ===== ROOM ID LOGIC =====
       // Получаем контекст чата из WebApp.initDataUnsafe (это источник истины в Telegram)
       const chatData = window.Telegram?.WebApp?.initDataUnsafe?.chat;
+      console.log('💬 Chat data:', chatData);
       
       if (startApp === 'game') {
         // Game API mode: детерминированный room по message_id
@@ -134,6 +139,8 @@ export default function App() {
           roomIdValue = `room-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         }
       }
+
+      console.log('✅ Room ID computed:', roomIdValue);
 
       setRoomCode(roomIdValue);
       setUserId(userIdValue);
