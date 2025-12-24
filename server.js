@@ -98,25 +98,20 @@ function getRoomState(roomId) {
   const room = wsRooms.get(roomId);
   if (!room) return null;
 
-  // Только игроки с живыми WS соединениями (исключаем "призраков")
-  const players = Array.from(wsClients.entries())
-    .filter(([_, client]) => client.roomId === roomId && isWsOpen(client.ws))
-    .map(([userId, client]) => {
-      const playerData = room.players[userId] || {
-        isInside: true,
-        bankedTotal: 0,
-        roundStash: 0
-      };
-      return {
-        userId,
-        username: client.username,
-        character: client.character,
-        isCreator: room.createdBy === userId,
-        isInside: playerData.isInside,
-        bankedTotal: playerData.bankedTotal,
-        roundStash: playerData.roundStash
-      };
-    });
+  // Для лобби показываем всех игроков из room.players
+  // (они там только если их WS соединение активно или только что присоединилось)
+  const players = Object.entries(room.players).map(([userId, playerData]) => {
+    const client = wsClients.get(userId);
+    return {
+      userId,
+      username: client?.username || `Player_${userId.substring(0, 6).toUpperCase()}`,
+      character: client?.character || null,
+      isCreator: room.createdBy === userId,
+      isInside: playerData.isInside,
+      bankedTotal: playerData.bankedTotal,
+      roundStash: playerData.roundStash
+    };
+  });
 
   return {
     roomId: room.roomId,
