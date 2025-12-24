@@ -344,22 +344,27 @@ wss.on('connection', (ws) => {
 
           // Если есть inline_message_id - используем его как ключ комнаты для inline игр
           let finalRoomId = roomId;
-          if (inlineMessageId) {
-            // Проверяем есть ли уже комната для этого inline_message_id
-            if (inlineMessageToRoom.has(inlineMessageId)) {
-              finalRoomId = inlineMessageToRoom.get(inlineMessageId);
-              console.log(`📍 Inline game: reusing room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
+          
+          // roomId может быть в формате GAME_lobby_key (от фронта)
+          // Если оно начинается с GAME_ и содержит информацию о лобби - используем как есть
+          if (finalRoomId && finalRoomId.startsWith('GAME_')) {
+            console.log(`📍 Using lobby-based room from frontend: ${finalRoomId}`);
+          } else if (!finalRoomId || finalRoomId === 'GAME_TEMP_' || !finalRoomId.startsWith('GAME_')) {
+            // Fallback: используем инлайн ID если есть
+            if (inlineMessageId) {
+              if (inlineMessageToRoom.has(inlineMessageId)) {
+                finalRoomId = inlineMessageToRoom.get(inlineMessageId);
+                console.log(`📍 Inline game: reusing room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
+              } else {
+                finalRoomId = `GAME_${inlineMessageId.substring(0, 20).toUpperCase()}`;
+                inlineMessageToRoom.set(inlineMessageId, finalRoomId);
+                console.log(`📍 Inline game: created room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
+              }
             } else {
-              // Создаём новую комнату с инлайн ID
-              finalRoomId = `GAME_${inlineMessageId.substring(0, 20).toUpperCase()}`;
-              inlineMessageToRoom.set(inlineMessageId, finalRoomId);
-              console.log(`📍 Inline game: created room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
+              // Крайний fallback
+              finalRoomId = `GAME_${Date.now().toString(36).toUpperCase()}_${validatedUserId}`;
+              console.log(`⚠️ No lobby key, generated room: ${finalRoomId}`);
             }
-          } else if (!roomId || roomId === 'GAME_TEMP') {
-            // Если roomId пустой или временный - используем сгенерированный
-            // Это происходит когда Telegram Game API не передаёт параметры
-            finalRoomId = `GAME_${Date.now().toString(36).toUpperCase()}_${validatedUserId}`;
-            console.log(`⚠️ No inline_message_id, generated room: ${finalRoomId}`);
           }
 
           if (!wsRooms.has(finalRoomId)) {

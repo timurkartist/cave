@@ -119,12 +119,20 @@ bot.on('callback_query', async (q) => {
     }
 
     console.log(`🎮 Game callback from user ${q.from.id}, game: ${q.game_short_name}`);
-    console.log(`   inline_message_id: ${q.inline_message_id}`);
 
-    // Telegram Game API передаёт inline_message_id в callback_query
-    // Мини-приложение получит это в initDataUnsafe.inline_message_id
-    // Сервер использует это как уникальный ключ для лобби
-    const url = `${APP_URL}?startapp=game`;
+    // Ключ лобби - идентификатор для определения какое лобби
+    // Все кто нажимают Play на одной и той же карточке → один и тот же ключ → одно лобби
+    const lobbyKey =
+      q.inline_message_id
+        ? `inl:${q.inline_message_id}`
+        : q.message
+          ? `msg:${q.message.chat.id}:${q.message.message_id}`
+          : `usr:${q.from.id}`; // крайний fallback
+
+    console.log(`   lobby_key: ${lobbyKey}`);
+
+    // Передаём ключ лобби в URL для мини-приложения
+    const url = `${APP_URL}?startapp=game&lobby=${encodeURIComponent(lobbyKey)}`;
 
     await bot.answerCallbackQuery(q.id, { url });
     console.log(`✅ Game URL sent to user`);
