@@ -23,6 +23,9 @@ console.log(`  APP_URL: ${APP_URL}`);
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // ===== IN-MEMORY GAME MESSAGE STORAGE =====
+// Ключ: chatId:messageId или inline_message_id
+// Значение: roomId
+const gameMessages = new Map();
 // Map to track game messages and their roomIds
 // Key: "chatId:messageId" (for messages) or "inline:inlineMessageId" (for inline)
 // Value: roomId
