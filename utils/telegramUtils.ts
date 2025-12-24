@@ -75,10 +75,22 @@ export function getTelegramUserData(): TelegramUser | null {
  * Get raw initData string for backend validation
  */
 export function getTelegramInitData(): string | null {
-  if (!isTelegramWebApp()) return null;
+  if (!isTelegramWebApp()) {
+    console.log('❌ getTelegramInitData: Not in Telegram WebApp');
+    return null;
+  }
   
   const webApp = getTelegramWebApp();
-  return webApp?.initData || null;
+  const initData = webApp?.initData || null;
+  
+  console.log('🔐 getTelegramInitData:', { 
+    hasWebApp: !!webApp,
+    hasInitData: !!initData,
+    initDataLength: initData?.length || 0,
+    initDataPreview: initData ? initData.substring(0, 100) + '...' : 'null'
+  });
+  
+  return initData;
 }
 
 /**

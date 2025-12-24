@@ -48,14 +48,23 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
       // Получаем initData для валидации на сервере
       const initData = getTelegramInitData();
       
-      console.log('📤 Sending join_room:', { userId, roomId, username, hasInitData: !!initData });
+      console.log('📤 Sending join_room:', { 
+        userId, 
+        roomId, 
+        username, 
+        initData: initData ? `${initData.substring(0, 50)}...` : 'null/undefined',
+        hasInitData: !!initData 
+      });
 
-      ws.send(JSON.stringify({
+      const messageObj = {
         type: 'join_room',
         userId,
         payload: { roomId, username },
         initData  // Отправляем для серверной валидации
-      }));
+      };
+      
+      console.log('📤 Full message to send:', JSON.stringify(messageObj).substring(0, 100) + '...');
+      ws.send(JSON.stringify(messageObj));
     };
 
     ws.onmessage = (event) => {
