@@ -504,8 +504,18 @@ wss.on('connection', (ws) => {
 
             // ✅ Переходим к следующему игроку в очереди
             const currentIndex = room.playerOrder.indexOf(room.currentTurnUserId);
-            const nextIndex = (currentIndex + 1) % room.playerOrder.length;
-            room.currentTurnUserId = room.playerOrder[nextIndex];
+            let nextIndex = (currentIndex + 1) % room.playerOrder.length;
+            let nextPlayerId = room.playerOrder[nextIndex];
+            
+            // Пропускаем игроков которые в лагере (не в экспедиции)
+            let skippedCount = 0;
+            while (!room.players[nextPlayerId]?.isInside && skippedCount < room.playerOrder.length) {
+              nextIndex = (nextIndex + 1) % room.playerOrder.length;
+              nextPlayerId = room.playerOrder[nextIndex];
+              skippedCount++;
+            }
+            
+            room.currentTurnUserId = nextPlayerId;
             console.log(`[${room.roomId}] Turn passed to ${room.currentTurnUserId}`);
 
             // Проверяем есть ли доступные ходы
@@ -579,6 +589,11 @@ wss.on('connection', (ws) => {
                   room.phase = 'EXPEDITION';
                   room.currentDecisions = {};
                   room.decisionsResult = null;
+                  
+                  // Устанавливаем ход на первого игрока который в экспедиции
+                  const firstInsidePlayer = room.playerOrder.find(playerId => room.players[playerId]?.isInside);
+                  room.currentTurnUserId = firstInsidePlayer || null;
+                  console.log(`[${room.roomId}] Back to EXPEDITION, turn to: ${room.currentTurnUserId}`);
                 } else {
                   room.phase = 'ROUND_END';
                   room.nextRoundAcks = {}; // Очищаем для нового раунда
