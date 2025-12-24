@@ -15,6 +15,11 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
+console.log('🤖 Bot Configuration:');
+console.log(`  BOT_TOKEN: ${BOT_TOKEN.substring(0, 10)}...`);
+console.log(`  API_URL: ${API_URL}`);
+console.log(`  APP_URL: ${APP_URL}`);
+
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // Функция обработки команды /start
@@ -50,17 +55,24 @@ const handleNewGameCommand = async (msg) => {
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     console.log(`🎮 Creating game ${roomId} in chat ${chatId}`);
     
+    // Optional: Log game creation to backend (non-critical)
     try {
-      const response = await axios.post(`${API_URL}/api/telegram/register-game`, {
+      const registerUrl = `${API_URL}/api/telegram/register-game`;
+      console.log(`📤 Registering game at: ${registerUrl}`);
+      const response = await axios.post(registerUrl, {
         roomId,
         chatId,
         creatorId: userId,
         creatorName: userName
-      });
+      }, { timeout: 3000 });
       console.log('✅ Game registered on server:', roomId);
     } catch (error) {
-      console.warn('⚠️ Server registration failed:', error.response?.status, error.message);
-      // Continue anyway - game creation is not critical
+      console.warn('⚠️ Server registration failed (non-critical):', {
+        status: error.response?.status,
+        message: error.message,
+        url: error.config?.url
+      });
+      // Continue anyway - game creation doesn't depend on this
     }
     
     // Use query parameter (?roomId=...) instead of hash (#roomId=...)
