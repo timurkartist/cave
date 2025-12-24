@@ -131,6 +131,7 @@ const handleUnknownCommand = (msg) => {
 // Обработка всех сообщений (работает в личных чатах и группах)
 bot.on('message', (msg) => {
   const text = msg.text || '';
+  console.log(`📨 Message from ${msg.from.first_name} (${msg.chat.id}): "${text}"`);
   
   // Игнорируем сообщения без текста
   if (!text) return;
