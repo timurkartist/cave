@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GameState, Player, GameCard, CardType } from './types';
 import { HAZARD_ICONS } from './constants';
 import { useGameWebSocket } from './hooks/useGameWebSocket';
-import { getTelegramIdentity } from './utils/telegramUtils';
+import { getTelegramIdentity, initTelegramWebApp } from './utils/telegramUtils';
 
 const GRID_WIDTH = 4;
 const TOTAL_ROUNDS = 5;
@@ -71,6 +71,10 @@ export default function App() {
   useEffect(() => {
     try {
       console.log('🚀 App initializing...');
+      
+      // Initialize Telegram WebApp immediately
+      initTelegramWebApp();
+      
       if (typeof window !== 'undefined') {
         let roomIdValue: string | null = null;
         let userIdValue: string | null = null;

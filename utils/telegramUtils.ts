@@ -20,6 +20,49 @@ export interface TelegramInitData {
 }
 
 /**
+ * Initialize Telegram WebApp - MUST be called on app startup
+ * This tells Telegram that the app is ready and WebApp data should be available
+ */
+export function initTelegramWebApp() {
+  if (typeof window === 'undefined') return;
+  
+  const webApp = (window as any).Telegram?.WebApp;
+  if (!webApp) {
+    console.log('⚠️ Telegram WebApp not available');
+    return;
+  }
+  
+  console.log('🚀 Initializing Telegram WebApp...');
+  
+  // Check data BEFORE ready
+  console.log('📋 Before webApp.ready():', {
+    hasInitData: !!webApp.initData,
+    hasInitDataUnsafe: !!webApp.initDataUnsafe,
+    hasUser: !!webApp.initDataUnsafe?.user,
+    user: webApp.initDataUnsafe?.user
+  });
+  
+  // Signal to Telegram that app is ready
+  webApp.ready();
+  
+  // Check data AFTER ready
+  console.log('📋 After webApp.ready():', {
+    hasInitData: !!webApp.initData,
+    hasInitDataUnsafe: !!webApp.initDataUnsafe,
+    hasUser: !!webApp.initDataUnsafe?.user,
+    user: webApp.initDataUnsafe?.user
+  });
+  
+  // Expand app to fullscreen
+  webApp.expand?.();
+  
+  // Disable vertical swipe for back navigation
+  webApp.disableVerticalSwipes?.();
+  
+  console.log('✅ Telegram WebApp initialized and expanded');
+}
+
+/**
  * Check if running inside Telegram WebApp
  */
 export function isTelegramWebApp(): boolean {
@@ -73,6 +116,7 @@ export function getTelegramUserData(): TelegramUser | null {
 
 /**
  * Get raw initData string for backend validation
+ * WARNING: Only available AFTER webApp.ready() has been called
  */
 export function getTelegramInitData(): string | null {
   if (!isTelegramWebApp()) {
@@ -83,11 +127,16 @@ export function getTelegramInitData(): string | null {
   const webApp = getTelegramWebApp();
   const initData = webApp?.initData || null;
   
+  // Try to also check initDataUnsafe
+  const initDataUnsafe = webApp?.initDataUnsafe;
+  
   console.log('🔐 getTelegramInitData:', { 
     hasWebApp: !!webApp,
     hasInitData: !!initData,
+    hasInitDataUnsafe: !!initDataUnsafe,
     initDataLength: initData?.length || 0,
-    initDataPreview: initData ? initData.substring(0, 100) + '...' : 'null'
+    initDataPreview: initData ? initData.substring(0, 100) + '...' : 'null/empty',
+    unsafeUser: initDataUnsafe?.user ? { id: initDataUnsafe.user.id, first_name: initDataUnsafe.user.first_name } : 'no user'
   });
   
   return initData;
