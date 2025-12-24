@@ -179,34 +179,35 @@ bot.on('inline_query', (query) => {
     
     console.log(`📱 Inline query: creating game ${roomId}`);
     
+    // Use game_short_name type instead of article for web_app buttons
     const results = [
       {
+        type: 'game',
+        id: roomId,
+        game_short_name: 'cave'  // Must be defined in BotFather
+      }
+    ];
+    
+    // If game_short_name doesn't work, fallback to article with input_message_content
+    // (input_message_content doesn't support reply_markup with web_app)
+    if (!results || results.length === 0) {
+      results.push({
         type: 'article',
         id: roomId,
         title: '🎮 Cave of Greed - Treasure Hunt',
         description: '🏴‍☠️ Explore the cave and collect treasure with friends',
-        thumb_url: 'https://via.placeholder.com/100?text=Game',
         input_message_content: {
           message_text: 
-            `🎮 <b>New Game Lobby</b>\n\n` +
+            `🎮 <b>Game Lobby Created</b>\n\n` +
             `🆔 Game ID: <code>${roomId}</code>\n` +
-            `👥 Invite friends to join!\n\n` +
-            `Click the button below to start exploring...`,
+            `📍 Join: ${gameUrl}`,
           parse_mode: 'HTML'
-        },
-        reply_markup: {
-          inline_keyboard: [[
-            {
-              text: '🎮 Start Game',
-              web_app: { url: gameUrl }
-            }
-          ]]
         }
-      }
-    ];
+      });
+    }
     
     bot.answerInlineQuery(query.id, results, {
-      cache_time: 0,  // Don't cache - each query should be fresh
+      cache_time: 0,
       is_personal: true
     });
     
