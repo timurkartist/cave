@@ -33,6 +33,21 @@ module.exports = {
       autorestart: true,
       watch: false,
       ignore_watch: ['node_modules', 'dist', 'logs'],
+    },
+    {
+      name: 'cave-game-bot',
+      script: 'bot.js',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production',
+      },
+      error_file: '/var/log/pm2/cave-bot-error.log',
+      out_file: '/var/log/pm2/cave-bot-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      autorestart: true,
+      watch: false,
+      ignore_watch: ['node_modules', 'dist', 'logs'],
     }
   ]
 };
