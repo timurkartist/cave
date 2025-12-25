@@ -18,7 +18,29 @@ server {
     }
 
     location / {
-        try_files $uri /index.html;
+        # Try to serve as static file from root /tmp/cave/dist
+        # If not found, proxy to Node.js backend (for WebSocket or SPA)
+        try_files $uri @backend;
+    }
+
+    location @backend {
+        # WebSocket or other requests to Node.js backend
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        
+        # WebSocket support - CRITICAL for real-time updates
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        
+        # Standard proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts for long-lived connections (WebSocket)
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
     }
 
     # ===== API =====
