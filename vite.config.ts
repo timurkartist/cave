@@ -14,8 +14,7 @@ export default defineConfig(({ mode }) => {
           'localhost',
           '127.0.0.1',
           '192.168.2.42',
-          'cave.ngrok.app',
-          'quinquevalent-premillennially-britta.ngrok-free.dev'
+          'keep-it-all.com'
         ],
         // Disable HMR for dev server - allows ngrok access
         hmr: false,
