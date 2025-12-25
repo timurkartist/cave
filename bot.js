@@ -52,7 +52,7 @@ const handleStartCommand = (msg) => {
     
     buttons.push({ 
       text: '🎮 Join Group Game', 
-      web_app: { url: `${APP_URL}?startapp=group` }
+      web_app: { url: `${APP_URL}?startapp=group&roomId=tgchat:${chatId}` }
     });
   }
   

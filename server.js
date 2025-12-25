@@ -6,7 +6,6 @@ import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { CardType, HazardType } from './types.js';
-import { validateTelegramInitData } from './utils/telegramValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +30,6 @@ function isWsOpen(ws) {
 // ===== GAME STATE =====
 const wsRooms = new Map(); // { roomId → roomState }
 const wsClients = new Map(); // { userId → { ws, roomId, username, character } }
-const inlineMessageToRoom = new Map(); // { inline_message_id → roomId } - маппинг для inline игр
 
 // Deck initialization
 const INITIAL_DECK = [
@@ -98,21 +96,24 @@ function getRoomState(roomId) {
   const room = wsRooms.get(roomId);
   if (!room) return null;
 
-  // Для лобби показываем всех игроков из room.players
-  // (они там остаются даже при disconnect, но помечаются как offline)
-  const players = Object.entries(room.players).map(([userId, playerData]) => {
-    const client = wsClients.get(userId);
-    return {
-      userId,
-      username: client?.username || `Player_${userId.substring(0, 6).toUpperCase()}`,
-      character: client?.character || null,
-      online: !!(client && isWsOpen(client.ws)), // ВАЖНО: флаг онлайна
-      isCreator: room.createdBy === userId,
-      isInside: playerData.isInside,
-      bankedTotal: playerData.bankedTotal,
-      roundStash: playerData.roundStash
-    };
-  });
+  // Только игроки с живыми WS соединениями (исключаем "призраков")
+  const players = Array.from(wsClients.entries())
+    .filter(([_, client]) => client.roomId === roomId && isWsOpen(client.ws))
+    .map(([userId, client]) => {
+      const playerData = room.players[userId] || {
+        isInside: true,
+        bankedTotal: 0,
+        roundStash: 0
+      };
+      return {
+        userId,
+        username: client.username,
+        character: client.character,
+        isInside: playerData.isInside,
+        bankedTotal: playerData.bankedTotal,
+        roundStash: playerData.roundStash
+      };
+    });
 
   return {
     roomId: room.roomId,
@@ -137,28 +138,15 @@ function broadcastToRoom(roomId) {
   if (!payload) return;
 
   const msg = JSON.stringify({ type: 'room_state', payload });
-  
-  // 🔍 DEBUG: Log all wsClients to see the state
-  const allClients = Array.from(wsClients.entries());
-  const roomClients = allClients.filter(([_, c]) => c.roomId === roomId);
-  const openClients = roomClients.filter(([_, c]) => isWsOpen(c.ws));
-  
-  console.log(`🔍 [DEBUG broadcastToRoom] allClients=${allClients.length}, roomClients=${roomClients.length}, openClients=${openClients.length}`);
-  roomClients.forEach(([uid, client]) => {
-    console.log(`   - ${uid}: isOpen=${isWsOpen(client.ws)}, lastSeen=${wsClients.get(uid) ? '✓' : '✗'}`);
-  });
-  
-  const clients = openClients.map(([_, c]) => c);
-  
-  console.log(`📡 Broadcasting to room ${roomId}: ${clients.length} connected clients, players in room: ${Object.keys(payload.players).length}`);
-  
-  clients.forEach(client => {
-    try {
-      client.ws.send(msg);
-    } catch (err) {
-      // Ignore send errors
-    }
-  });
+  Array.from(wsClients.values())
+    .filter(client => client.roomId === roomId && isWsOpen(client.ws))
+    .forEach(client => {
+      try {
+        client.ws.send(msg);
+      } catch (err) {
+        // Ignore send errors
+      }
+    });
 }
 
 // ===== GAME LOGIC =====
@@ -224,7 +212,6 @@ function handleDecisions(room) {
       const totalGems = roundStash + gemsPerLeaver;
       leaversGemsData[userId] = { roundStash, pathShare: gemsPerLeaver, total: totalGems };
       
-      console.log(`[${room.roomId}] ${userId} left: roundStash=${roundStash}, pathShare=${gemsPerLeaver}, total=${totalGems}, isInside now=false`);
       room.players[userId].bankedTotal += totalGems;
       room.players[userId].roundStash = 0;
       room.players[userId].isInside = false;
@@ -294,14 +281,9 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data.toString());
-      const { type, userId: rawUserId, payload } = message;
-      
-      // ВАЖНО: используем canonical userId из сокета, если уже присоединились
-      // Это гарантирует, что даже если фронт пришлет неправильный userId, 
-      // мы используем корректный (установленный при join_room)
-      const effectiveUserId = ws._userId || rawUserId;
+      const { type, userId, payload } = message;
 
-      if (!type || !effectiveUserId) {
+      if (!type || !userId) {
         ws.send(JSON.stringify({ type: 'error', message: 'Missing type or userId' }));
         return;
       }
@@ -318,153 +300,59 @@ wss.on('connection', (ws) => {
       switch (type) {
         case 'join_room': {
           const { roomId, username } = payload;
-          const initData = message.initData; // Получаем initData для валидации
 
-          console.log(`📥 join_room: username=${username}, roomId=${roomId}, initData=${!!initData}`);
-
-          // ===== TELEGRAM VALIDATION (если initData предоставлен) =====
-          // Если игрок присоединяется из Telegram WebApp, валидируем initData
-          let validatedUserId = userId;
-          let finalUsername = username;
-          let inlineMessageId = null;
-          
-          if (initData) {
-            const botToken = process.env.TELEGRAM_BOT_TOKEN;
-            if (!botToken) {
-              console.warn('⚠️ TELEGRAM_BOT_TOKEN not set, skipping initData validation');
-            } else {
-              const validation = validateTelegramInitData(initData, botToken);
-              if (!validation.valid) {
-                console.warn(`❌ initData validation failed for userId: ${userId}`);
-                try {
-                  ws.send(JSON.stringify({
-                    type: 'error',
-                    payload: { message: 'Invalid Telegram credentials' }
-                  }));
-                } catch {}
-                ws.close(4001, 'Invalid credentials');
-                return;
-              }
-              
-              // Используем валидированный userId из Telegram
-              if (validation.user) {
-                validatedUserId = String(validation.user.id);
-                console.log(`✅ initData validated, Telegram user: ${validatedUserId}`);
-                
-                // ===== ПЕРЕОПРЕДЕЛЯЕМ username ПО ДАННЫМ ИЗ TELEGRAM =====
-                const u = validation.user;
-                finalUsername =
-                  (u.username && `@${u.username}`) ||
-                  [u.first_name, u.last_name].filter(Boolean).join(' ') ||
-                  `Player ${u.id}`;
-                console.log(`✅ Using Telegram identity: username=${finalUsername}, id=${validatedUserId}`);
-              }
-              
-              // Извлекаем inline_message_id - это уникальный ключ для лобби в Telegram Game API
-              // Telegram гарантированно передаёт это в initDataUnsafe.inline_message_id
-              if (validation.inlineMessageId) {
-                inlineMessageId = validation.inlineMessageId;
-                console.log(`📍 Got inline_message_id from Telegram: ${inlineMessageId}`);
-              }
-            }
-          }
-
-          // Если есть inline_message_id - используем его как ключ комнаты для inline игр
-          let finalRoomId = roomId;
-          
-          // roomId может быть в формате GAME_lobby_key (от фронта)
-          // Если оно начинается с GAME_ и содержит информацию о лобби - используем как есть
-          if (finalRoomId && finalRoomId.startsWith('GAME_')) {
-            console.log(`📍 Using lobby-based room from frontend: ${finalRoomId}`);
-          } else if (!finalRoomId || finalRoomId === 'GAME_TEMP_' || !finalRoomId.startsWith('GAME_')) {
-            // Fallback: используем инлайн ID если есть
-            if (inlineMessageId) {
-              if (inlineMessageToRoom.has(inlineMessageId)) {
-                finalRoomId = inlineMessageToRoom.get(inlineMessageId);
-                console.log(`📍 Inline game: reusing room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
-              } else {
-                finalRoomId = `GAME_${inlineMessageId.substring(0, 20).toUpperCase()}`;
-                inlineMessageToRoom.set(inlineMessageId, finalRoomId);
-                console.log(`📍 Inline game: created room ${finalRoomId} for inline_message_id ${inlineMessageId}`);
-              }
-            } else {
-              // Крайний fallback
-              finalRoomId = `GAME_${Date.now().toString(36).toUpperCase()}_${validatedUserId}`;
-              console.log(`⚠️ No lobby key, generated room: ${finalRoomId}`);
-            }
-          }
-
-          if (!wsRooms.has(finalRoomId)) {
-            wsRooms.set(finalRoomId, createRoomState(finalRoomId));
+          if (!wsRooms.has(roomId)) {
+            wsRooms.set(roomId, createRoomState(roomId));
           }
 
           // Если userId уже существует - закрываем старый сокет
-          const existing = wsClients.get(validatedUserId);
+          const existing = wsClients.get(userId);
           if (existing && existing.ws && existing.ws !== ws) {
-            console.log(`⚠️ Closing existing connection for ${validatedUserId}, old room: ${existing.roomId}`);
             try { existing.ws.close(4000, 'Reconnected'); } catch {}
           }
 
-          console.log(`✅ Connecting ${validatedUserId} to room ${finalRoomId}, username: ${finalUsername}`);
-
-          wsClients.set(validatedUserId, { ws, roomId: finalRoomId, userId: validatedUserId, username: finalUsername, character: null });
+          wsClients.set(userId, { ws, roomId, userId, username, character: null });
 
           // Сохраняем метаданные на ws для очистки
-          ws._userId = validatedUserId;
-          ws._roomId = finalRoomId;
-          
-          // 🔍 DEBUG: Log wsClients state after set
-          console.log(`🔍 [DEBUG after wsClients.set] wsClients.size=${wsClients.size}, wsClients.has(${validatedUserId})=${wsClients.has(validatedUserId)}`);
+          ws._userId = userId;
+          ws._roomId = roomId;
 
-          const room = wsRooms.get(finalRoomId);
+          const room = wsRooms.get(roomId);
           
           // ✅ Первый игрок становится creator
           if (!room.createdBy) {
-            room.createdBy = validatedUserId;
+            room.createdBy = userId;
           }
           
-          if (!room.players[validatedUserId]) {
-            room.players[validatedUserId] = { isInside: true, bankedTotal: 0, roundStash: 0 };
-          }
-          
-          // 🔍 DEBUG: Log room.players state after add
-          console.log(`🔍 [DEBUG after room.players add] room.players.count=${Object.keys(room.players).length}, keys=[${Object.keys(room.players).join(', ')}]`);
-
-          // ВАЖНО: отправить состояние конкретно этому сокету сразу
-          // Это страховка на случай если клиент еще не начал слушать broadcast
-          try {
-            ws.send(JSON.stringify({ type: 'room_state', payload: getRoomState(finalRoomId) }));
-            console.log(`✉️ Sent room_state directly to joining socket`);
-          } catch (err) {
-            console.error(`❌ Failed to send direct room_state: ${err.message}`);
+          if (!room.players[userId]) {
+            room.players[userId] = { isInside: true, bankedTotal: 0, roundStash: 0 };
           }
 
-          // Затем broadcast всем остальным
-          broadcastToRoom(finalRoomId);
-          console.log(`[${finalRoomId}] ${finalUsername} (${validatedUserId}) joined (creator: ${room.createdBy === validatedUserId})`);
+          broadcastToRoom(roomId);
+          console.log(`[${roomId}] ${username} joined (creator: ${room.createdBy === userId})`);
           break;
         }
 
         case 'select_character': {
-          const client = wsClients.get(effectiveUserId);
+          const client = wsClients.get(userId);
           if (client) {
             const oldChar = client.character;
             client.character = payload.characterId;
-            console.log(`[${client.roomId}] ${effectiveUserId} selected character: ${payload.characterId} (was: ${oldChar})`);
+            console.log(`[${client.roomId}] ${userId} selected character: ${payload.characterId} (was: ${oldChar})`);
             broadcastToRoom(client.roomId);
             console.log(`[${client.roomId}] Broadcasted room state`);
           } else {
-            console.log(`[select_character] Client not found: ${effectiveUserId}`);
+            console.log(`[select_character] Client not found: ${userId}`);
           }
           break;
         }
 
         case 'start_game': {
-          const client = wsClients.get(effectiveUserId);
+          const client = wsClients.get(userId);
           if (!client) return;
 
           const room = wsRooms.get(client.roomId);
-          if (!room || room.createdBy !== effectiveUserId) {
+          if (!room || room.createdBy !== userId) {
             ws.send(JSON.stringify({ type: 'error', message: 'Only creator can start' }));
             return;
           }
@@ -506,22 +394,22 @@ wss.on('connection', (ws) => {
 
         case 'player_action': {
           const { action, data } = payload;
-          const client = wsClients.get(effectiveUserId);
+          const client = wsClients.get(userId);
           if (!client) return;
 
           const room = wsRooms.get(client.roomId);
           if (!room) return;
           
-          console.log(`[${room.roomId}] player_action: ${action}, userId: ${effectiveUserId}, phase: ${room.phase}`);
+          console.log(`[${room.roomId}] player_action: ${action}, userId: ${userId}, phase: ${room.phase}`);
 
           if (action === 'dig') {
             // ✅ Проверяем что это ход текущего игрока
-            if (room.phase !== 'EXPEDITION' || !room.players[effectiveUserId]?.isInside) {
+            if (room.phase !== 'EXPEDITION' || !room.players[userId]?.isInside) {
               return;
             }
 
-            if (room.currentTurnUserId !== effectiveUserId) {
-              console.log(`[${room.roomId}] Dig denied: ${effectiveUserId} tried to dig but it's ${room.currentTurnUserId}'s turn`);
+            if (room.currentTurnUserId !== userId) {
+              console.log(`[${room.roomId}] Dig denied: ${userId} tried to dig but it's ${room.currentTurnUserId}'s turn`);
               return;
             }
 
@@ -549,21 +437,8 @@ wss.on('connection', (ws) => {
 
             // ✅ Переходим к следующему игроку в очереди
             const currentIndex = room.playerOrder.indexOf(room.currentTurnUserId);
-            let nextIndex = (currentIndex + 1) % room.playerOrder.length;
-            let nextPlayerId = room.playerOrder[nextIndex];
-            
-            console.log(`[${room.roomId}] Finding next player: currentIndex=${currentIndex}, nextIndex=${nextIndex}, nextPlayerId=${nextPlayerId}, isInside=${room.players[nextPlayerId]?.isInside}`);
-            
-            // Пропускаем игроков которые в лагере (не в экспедиции)
-            let skippedCount = 0;
-            while (!room.players[nextPlayerId]?.isInside && skippedCount < room.playerOrder.length) {
-              console.log(`[${room.roomId}] Skipping ${nextPlayerId} (not inside), skippedCount=${skippedCount}`);
-              nextIndex = (nextIndex + 1) % room.playerOrder.length;
-              nextPlayerId = room.playerOrder[nextIndex];
-              skippedCount++;
-            }
-            
-            room.currentTurnUserId = nextPlayerId;
+            const nextIndex = (currentIndex + 1) % room.playerOrder.length;
+            room.currentTurnUserId = room.playerOrder[nextIndex];
             console.log(`[${room.roomId}] Turn passed to ${room.currentTurnUserId}`);
 
             // Проверяем есть ли доступные ходы
@@ -614,7 +489,7 @@ wss.on('connection', (ws) => {
             // ✅ Записываем решение
             if (room.phase !== 'VOTING') return;
 
-            room.currentDecisions[effectiveUserId] = data.choice;
+            room.currentDecisions[userId] = data.choice;
 
             // Проверяем все ли решили
             const insideIds = Object.entries(room.players)
@@ -626,7 +501,6 @@ wss.on('connection', (ws) => {
             if (allDecided) {
               // Применяем результаты
               const { leavers, stayers, leaversGemsData } = handleDecisions(room);
-              console.log(`[${room.roomId}] After decisions: leavers=${leavers.length}, stayers=${stayers.length}`);
               room.decisionsResult = { decisions: room.currentDecisions, leavers, leaversGemsData };
               room.phase = 'RESULTS';
 
@@ -638,13 +512,7 @@ wss.on('connection', (ws) => {
                   room.phase = 'EXPEDITION';
                   room.currentDecisions = {};
                   room.decisionsResult = null;
-                  
-                  // Устанавливаем ход на первого игрока который в экспедиции
-                  const firstInsidePlayer = room.playerOrder.find(playerId => room.players[playerId]?.isInside);
-                  room.currentTurnUserId = firstInsidePlayer || null;
-                  console.log(`[${room.roomId}] Back to EXPEDITION, turn to: ${room.currentTurnUserId}`);
                 } else {
-                  console.log(`[${room.roomId}] All players left the mine! Going to ROUND_END`);
                   room.phase = 'ROUND_END';
                   room.nextRoundAcks = {}; // Очищаем для нового раунда
                 }
@@ -662,8 +530,8 @@ wss.on('connection', (ws) => {
             }
 
             // Записываем что этот игрок готов
-            room.nextRoundAcks[effectiveUserId] = true;
-            console.log(`[${room.roomId}] Player ${effectiveUserId} acknowledged next_round, acks:`, room.nextRoundAcks);
+            room.nextRoundAcks[userId] = true;
+            console.log(`[${room.roomId}] Player ${userId} acknowledged next_round, acks:`, room.nextRoundAcks);
 
             // Получаем всех живых игроков в комнате
             const activePlayers = Array.from(wsClients.entries())
@@ -689,9 +557,7 @@ wss.on('connection', (ws) => {
                 room.nextRoundAcks = {}; // Очищаем acknowledgments
                 // ✅ Переходим на первого игрока в порядке
                 room.currentTurnUserId = room.playerOrder[0] || null;
-                console.log(`[${room.roomId}] === Resetting isInside for new round ${room.round} ===`);
-                Object.entries(room.players).forEach(([userId, player]) => {
-                  console.log(`[${room.roomId}] Reset ${userId}: isInside = true (was ${player.isInside}), roundStash = 0`);
+                Object.entries(room.players).forEach(([_, player]) => {
                   player.isInside = true;
                   player.roundStash = 0;
                 });
@@ -708,8 +574,8 @@ wss.on('connection', (ws) => {
             }
 
             // Записываем что этот игрок готов к новой игре
-            room.newGameAcks[effectiveUserId] = true;
-            console.log(`[${room.roomId}] Player ${effectiveUserId} acknowledged new_game, acks:`, room.newGameAcks);
+            room.newGameAcks[userId] = true;
+            console.log(`[${room.roomId}] Player ${userId} acknowledged new_game, acks:`, room.newGameAcks);
 
             // Получаем всех живых игроков в комнате
             const activePlayers = Array.from(wsClients.entries())
@@ -757,33 +623,8 @@ wss.on('connection', (ws) => {
       const current = wsClients.get(uid);
       if (current && current.ws === ws) {
         wsClients.delete(uid);
-        
-        // Если это был creator - переназначаем creator другому игроку в комнате
-        if (rid) {
-          const room = wsRooms.get(rid);
-          if (room) {
-            // НЕ удаляем игрока сразу из room.players — даём реконнекту случиться без "мигания"
-            // Игрок остаётся в room.players, но wsClients удален → он offline
-            console.log(`[${rid}] ${uid} disconnected (kept in room.players for reconnect)`);
-            
-            // Переназначаем creator если нужно
-            if (room.createdBy === uid) {
-              // Ищем другого живого игрока в комнате (только в wsClients)
-              const anotherPlayer = Array.from(wsClients.values()).find(
-                c => c.roomId === rid && c.userId !== uid
-              );
-              if (anotherPlayer) {
-                room.createdBy = anotherPlayer.userId;
-                console.log(`[${rid}] Creator changed to ${anotherPlayer.userId}`);
-              } else {
-                // Больше нет онлайн игроков - creator = null
-                room.createdBy = null;
-                console.log(`[${rid}] Room empty (no online players) - creator reset`);
-              }
-            }
-          }
-          broadcastToRoom(rid);
-        }
+        if (rid) broadcastToRoom(rid);
+        console.log(`[${rid}] ${uid} disconnected`);
         return;
       }
     }
@@ -792,30 +633,8 @@ wss.on('connection', (ws) => {
     for (const [scanUid, c] of wsClients.entries()) {
       if (c.ws === ws) {
         wsClients.delete(scanUid);
-        
-        // Переназначение creator при отключении
-        if (c.roomId) {
-          const room = wsRooms.get(c.roomId);
-          if (room) {
-            // НЕ удаляем игрока сразу из room.players
-            console.log(`[${c.roomId}] ${scanUid} disconnected (kept in room.players for reconnect, fallback)`);
-            
-            // Переназначаем creator если нужно
-            if (room.createdBy === scanUid) {
-              const anotherPlayer = Array.from(wsClients.values()).find(
-                cl => cl.roomId === c.roomId && cl.userId !== scanUid
-              );
-              if (anotherPlayer) {
-                room.createdBy = anotherPlayer.userId;
-                console.log(`[${c.roomId}] Creator changed to ${anotherPlayer.userId}`);
-              } else {
-                room.createdBy = null;
-                console.log(`[${c.roomId}] Room empty (no online players) - creator reset`);
-              }
-            }
-          }
-          broadcastToRoom(c.roomId);
-        }
+        if (c.roomId) broadcastToRoom(c.roomId);
+        console.log(`[${c.roomId}] ${scanUid} disconnected (fallback)`);
         break;
       }
     }

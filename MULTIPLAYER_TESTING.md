@@ -167,13 +167,13 @@ npm run start:ngrok
 
 Будет что-то вроде:
 ```
-Ngrok running at: https://keep-it-all.com
+Ngrok running at: https://quinquevalent-premillennially-britta.ngrok-free.dev
 Updated TELEGRAM_APP_URL in .env
 ```
 
 Тогда откройся в браузере:
 ```
-https://keep-it-all.com/
+https://quinquevalent-premillennially-britta.ngrok-free.dev/
 ```
 
 И у тебя будет реальная онлайн игра для двух и больше игроков!

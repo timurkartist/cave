@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getTelegramInitData } from '../utils/telegramUtils';
 
 export function useGameWebSocket(roomId: string, userId: string, username: string) {
   const [roomState, setRoomState] = useState<any>(null);
@@ -15,24 +14,21 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
 
   // ===== CONNECT =====
   useEffect(() => {
-    // Guard clause: не подключаться пока нет всех параметров
-    if (!roomId || !userId || !username) {
-      console.log('⏳ Waiting for connection params:', { roomId: !!roomId, userId: !!userId, username: !!username });
-      return;
-    }
+    if (!roomId || !userId || !username) return;
     if (hasConnectedRef.current) return;
 
     hasConnectedRef.current = true;
-    console.log('🔗 Ready to connect with params:', { roomId, userId, username });
 
     const getWebSocketURL = () => {
       if (typeof window === 'undefined') return '';
       const { hostname, protocol } = window.location;
-      const wsProto = protocol === 'https:' ? 'wss' : 'ws';
 
-      // WebSocket слушает на корне сервера (/)
-      // Nginx проксирует и передаёт upgrade headers
-      return `${wsProto}://${hostname}/`;
+      if (hostname.includes('ngrok')) {
+        return `wss://${hostname}`;
+      }
+
+      const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProtocol}//${hostname}:3001`;
     };
 
     const wsUrl = getWebSocketURL();
@@ -45,26 +41,11 @@ export function useGameWebSocket(roomId: string, userId: string, username: strin
       setConnected(true);
       setError(null);
 
-      // Получаем initData для валидации на сервере
-      const initData = getTelegramInitData();
-      
-      console.log('📤 Sending join_room:', { 
-        userId, 
-        roomId, 
-        username, 
-        initData: initData ? `${initData.substring(0, 50)}...` : 'null/undefined',
-        hasInitData: !!initData 
-      });
-
-      const messageObj = {
+      ws.send(JSON.stringify({
         type: 'join_room',
         userId,
-        payload: { roomId, username },
-        initData  // Отправляем для серверной валидации
-      };
-      
-      console.log('📤 Full message to send:', JSON.stringify(messageObj).substring(0, 100) + '...');
-      ws.send(JSON.stringify(messageObj));
+        payload: { roomId, username }
+      }));
     };
 
     ws.onmessage = (event) => {

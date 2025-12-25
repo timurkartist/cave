@@ -26,8 +26,9 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  ИНТЕРНЕТ (Production Domain)                       │
-│  https://keep-it-all.com                            │
+│  ИНТЕРНЕТ (через ngrok)                            │
+│  https://quinquevalent-premillennially-britta.      │
+│  ngrok-free.dev                                    │
 └──────────────┬──────────────────────────────────────┘
                │
        ┌───────┴───────┐
